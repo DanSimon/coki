@@ -1,40 +1,43 @@
+#![feature(phase)]
+#[phase(plugin)]
+extern crate regex_macros;
 extern crate regex;
 
-use regex::Regex;
+use regex::{Captures, Regex};
 
 pub struct parser;
 
-type ParseResult<'a, T> = Result<(T, &'a[u8]), String>;
+type ParseResult<'a, T> = Result<(T, &'a str), String>;
 
-trait Parser<T> {
+trait Parser<'a, T> {
 
-  fn parse<'a>(&self, data: &'a [u8]) -> ParseResult<'a, T>;
+  fn parse(&self, data: &'a str) -> ParseResult<'a, T>;
 
-  fn and_then<'a, B>(&'a self, next: &'a Parser<B>) -> DualParser<T,B> {
+  fn and_then<B>(&'a self, next: &'a Parser<'a, B>) -> DualParser<'a, T,B> {
     DualParser{first: self, second: next}
   }
-  fn or<'a, B>(&'a self, next: &'a Parser<B>) -> OrParser<T,B> {
+  fn or<B>(&'a self, next: &'a Parser<'a, B>) -> OrParser<'a, T,B> {
     OrParser{a: self, b: next}
   }
 }
 
 
-pub struct CharParser{the_char: u8}
+pub struct CharParser{the_char: char}
 
 impl CharParser {
-  fn new(c: u8) -> CharParser {
+  fn new(c: char) -> CharParser {
     CharParser{the_char: c}
   }
 }
 
-impl Parser<char> for CharParser {
+impl<'a> Parser<'a, char> for CharParser {
 
-  fn parse<'a>(&self, data: &'a [u8]) -> ParseResult<'a, char> {
+  fn parse(&self, data: &'a str) -> ParseResult<'a, char> {
     if data.len() > 0 {
-      if (data[0] == self.the_char) {
-        Ok((data[0] as char, data.slice_from(1)))
+      if data.char_at(0) == self.the_char {
+        Ok((self.the_char, data.slice_from(1)))
       } else {
-        Err(format!("Expected {}, got {}", self.the_char, data[0]))
+        Err(format!("Expected {}, got {}", self.the_char, data.char_at(0)))
       }
     } else {
       Err(format!("No data left"))
@@ -45,13 +48,14 @@ impl Parser<char> for CharParser {
 pub struct RegexParser {
   regex: Regex
 }
-//TODO: this is all kinds of horrible, had a lot of trouble getting it to work
-impl Parser<String> for RegexParser {
-  fn parse<'a>(&self, data: &'a [u8]) -> ParseResult<'a, String> {
-    let s = String::from_utf8_lossy(data);
-    let strdata = s.as_slice();
-    match self.regex.find(strdata) {
-      Some((0, e)) => Ok((String::from_str(strdata.slice_to(e)), data.slice_from(e))),
+
+impl<'a> Parser<'a, Captures<'a>> for RegexParser {
+  fn parse(&self, data: &'a str) -> ParseResult<'a, Captures<'a>> {
+    match self.regex.captures(data) {
+      Some(cap) => {
+        let start = cap.at(0).len();
+        Ok((cap, data.slice_from(start)))
+      }
       _ => Err(format!("no match or match not on first bye"))
     }
   }
@@ -62,11 +66,11 @@ impl Parser<String> for RegexParser {
 
 pub struct RepParser<'a, T>{
   reps: uint,
-  parser: &'a Parser<T> + 'a
+  parser: &'a Parser<'a, T> + 'a
 }
 
-impl<'a, T> Parser<Vec<T>> for RepParser<'a, T> {
-  fn parse<'a>(&self, data: &'a [u8]) -> ParseResult<'a, Vec<T>> {
+impl<'a, T> Parser<'a, Vec<T>> for RepParser<'a, T> {
+  fn parse(&self, data: &'a str) -> ParseResult<'a, Vec<T>> {
     let mut v: Vec<T> = Vec::new();
     let mut remain = data;
     for i in range(0, self.reps) {
@@ -85,13 +89,13 @@ impl<'a, T> Parser<Vec<T>> for RepParser<'a, T> {
 }
 
 pub struct DualParser<'a, A, B> {
-  first: &'a Parser<A> + 'a,
-  second: &'a Parser<B> + 'a
+  first: &'a Parser<'a, A> + 'a,
+  second: &'a Parser<'a, B> + 'a
 }
 
-impl <'a, A, B> Parser<(A,B)> for DualParser<'a, A, B> {
+impl <'a, A, B> Parser<'a, (A,B)> for DualParser<'a, A, B> {
   
-  fn parse<'a>(&self, data: &'a [u8]) -> ParseResult<'a, (A, B)> {
+  fn parse(&self, data: &'a str) -> ParseResult<'a, (A, B)> {
     /*  doesn't work :(
     self.first.parse(data).and_then(
       |(a, d2)| self.second.parse(d2).and_then(
@@ -115,12 +119,12 @@ pub enum Or<A,B> {
 }
 
 pub struct OrParser<'a, A, B> {
-  a: &'a Parser<A> + 'a,
-  b: &'a Parser<B> + 'a
+  a: &'a Parser<'a, A> + 'a,
+  b: &'a Parser<'a, B> + 'a
 }
 
-impl<'a, A, B> Parser<Or<A,B>> for OrParser<'a, A, B> {
-  fn parse<'a>(&self, data: &'a [u8]) -> ParseResult<'a, Or<A, B>> {
+impl<'a, A, B> Parser<'a, Or<A,B>> for OrParser<'a, A, B> {
+  fn parse(&self, data: &'a str) -> ParseResult<'a, Or<A, B>> {
     match self.a.parse(data) {
       Ok((a, d2)) => Ok((OrA(a), d2)),
       Err(err) => match self.b.parse(data) {
@@ -138,24 +142,32 @@ impl<'a, A, B> Parser<Or<A,B>> for OrParser<'a, A, B> {
 
 #[test]
 fn test_char() {
-  let ch = CharParser::new('v' as u8);
-  let data = ['v' as u8, 'b'as u8, 'x' as u8];
-  match ch.parse(&data) {
+  let ch = CharParser::new('v');
+  let data = "vbx";
+  match ch.parse(data) {
     Ok((c, rest)) => {
       assert!(c == 'v');
       assert!(rest.len() == 2);
-      assert!(rest[0] == 'b' as u8);
+      assert!(rest.char_at(0) == 'b');
     }
     Err(err) => {fail!(format!("unepected error: {}", err));}
   }
 }
 
 #[test]
+fn test_regex() {
+  let reg = regex!("ab[cd]");
+  let parser_a = RegexParser{regex: reg};
+  let data = "abdabc";
+  assert!(parser_a.parse(data) == Ok(("abd", "abc")));
+}
+
+#[test]
 fn test_rep() {
-  let ch = CharParser::new('v' as u8);
+  let ch = CharParser::new('v');
   let rep = RepParser{reps: 3, parser: &ch};
-  let data = ['v' as u8, 'v'as u8, 'v' as u8, 'x' as u8];
-  match rep.parse(&data) {
+  let data = "vvvx";
+  match rep.parse(data) {
     Ok((vec, rest)) => {
       assert!(vec.len() == 3)
       for c in vec.iter() {
@@ -168,10 +180,10 @@ fn test_rep() {
 
 #[test]
 fn test_and_then() {
-  let a = CharParser::new('a' as u8);
-  let b = CharParser::new('b' as u8);
+  let a = CharParser::new('a' );
+  let b = CharParser::new('b' );
   let ab = a.and_then(&b);
-  let data = ['a' as u8, 'b'as u8, 'v' as u8, 'x' as u8];
+  let data = "abvx";
   match ab.parse(data) {
     Ok(((a, b), rem)) => {
       assert!(a == 'a');
@@ -186,10 +198,10 @@ fn test_and_then() {
 
 #[test]
 fn test_or() {
-  let a = CharParser::new('a' as u8);
-  let b = CharParser::new('b' as u8);
+  let a = CharParser::new('a' );
+  let b = CharParser::new('b' );
   let ab = a.or(&b);
-  let data = ['a' as u8, 'b'as u8, 'v' as u8, 'x' as u8];
+  let data = "abvx";
   match ab.parse(data) {
     Ok((OrA('a'), rem)) => {
       match ab.parse(rem) {
@@ -205,7 +217,6 @@ fn test_or() {
   }
 }
   
-
 
 
 
