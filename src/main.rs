@@ -1,4 +1,14 @@
+#![feature(globs)]
+//extern crate regex_macros;
+//extern crate regex;
+//extern crate parsers;
+
 use std::collections::HashMap;
+use parsers::*;
+
+pub mod parsers;
+
+
 
 fn main() {
 
@@ -15,7 +25,50 @@ fn main() {
 
   run(&prog);
 
+  let p2 = "x = 3 + 4";
+  let t = tokenize(p2);
+  for x in t.iter() {
+    println!("{}", x);
+  }
+
+  let eq    = LiteralParser{literal: Equals};
+  let eq2   = LiteralParser{literal: Number(34)};
+  let por   = OrParser{a: &eq, b: &eq2};
+  let repEq = RepParser{reps: 3, parser: &por};
+
+
+  let data = [Equals, Equals, Number(34), PlusSign];
+  match repEq.parse(data) {
+    Ok(k) => {println!("ok");}
+    Err(err) => {println!("error: {}", err);}
+  }
+
+
 }
+
+fn tokenize<'a>(input: &'a str) -> Vec<Token> {
+  let mut lines = input.split('\n');
+  let mut build: Vec<Token> = Vec::new();
+  for line in lines {
+    let mut toks = line.split(' ');
+    for tok in toks {
+      match tok.trim() {
+        "=" => {build.push(Equals);}
+        "+" => {build.push(PlusSign);}
+        "out" => {build.push(OutputCmd)}
+        "" => {}
+        other => { build.push(Ident(String::from_str(other)))}
+      };
+    }
+    build.push(NewLine);
+  }
+  build
+}
+
+/*
+trait TokenParser<T> {
+  fn parse<'a>(tokens: &'a [Token]>)
+*/
 
 fn run(prog: &Vec<Statement>) {
   let mut env: HashMap<&str, int> = HashMap::new();
@@ -70,6 +123,10 @@ enum Statement {
   Output(Expr),
 }
 
+#[deriving(Show)]
+#[deriving(Eq)]
+#[deriving(PartialEq)]
+#[deriving(Clone)]
 enum Token {
   Equals,
   Ident(String),

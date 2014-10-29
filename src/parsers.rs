@@ -1,78 +1,58 @@
 #![feature(phase)]
 #[phase(plugin)]
-extern crate regex_macros;
-extern crate regex;
 
-use regex::{Captures, Regex};
+//use regex::{Captures, Regex};
 
 pub struct parser;
 
-type ParseResult<'a, T> = Result<(T, &'a str), String>;
+pub type ParseResult<'a, I:'a, O> = Result<(O, I), String>;
 
-trait Parser<'a, T> {
+pub trait Parser<'a, I, O> {
 
-  fn parse(&self, data: &'a str) -> ParseResult<'a, T>;
-
-  fn and_then<B>(&'a self, next: &'a Parser<'a, B>) -> DualParser<'a, T,B> {
+  fn parse(&self, data: I) -> ParseResult<'a, I, O>;
+  fn and_then<B>(&'a self, next: &'a Parser<'a, I, B>) -> DualParser<'a, I, O ,B> {
     DualParser{first: self, second: next}
   }
-  fn or<B>(&'a self, next: &'a Parser<'a, B>) -> OrParser<'a, T,B> {
+  fn or<B>(&'a self, next: &'a Parser<'a, I, B>) -> OrParser<'a, I, O, B> {
     OrParser{a: self, b: next}
   }
 }
 
+trait TokenParser<'a, I, O> : Parser<'a, Vec<I>, O> {
 
-pub struct CharParser{the_char: char}
-
-impl CharParser {
-  fn new(c: char) -> CharParser {
-    CharParser{the_char: c}
-  }
 }
 
-impl<'a> Parser<'a, char> for CharParser {
+pub struct LiteralParser<'a, T:'a + Eq> {
+  pub literal: T,
+}
 
-  fn parse(&self, data: &'a str) -> ParseResult<'a, char> {
-    if data.len() > 0 {
-      if data.char_at(0) == self.the_char {
-        Ok((self.the_char, data.slice_from(1)))
-      } else {
-        Err(format!("Expected {}, got {}", self.the_char, data.char_at(0)))
-      }
+impl<'a, T: 'a + Eq + Clone> Parser<'a,  &'a [T], T> for LiteralParser<'a, T> {
+  fn parse(&self, data: &'a[T]) -> ParseResult<'a, &'a[T], T> {
+    if data[0] == self.literal {
+      Ok((data[0].clone(), data.slice_from(1)))
     } else {
-      Err(format!("No data left"))
+      Err(format!("Literal mismatch"))
     }
   }
 }
 
-pub struct RegexParser {
-  regex: Regex
+/*
+pub struct MatchParser<'a, I, O> {
+  matcher: |I| -> Option<O>
+}
+impl
+*/
+
+
+pub struct RepParser<'a, I, O>{
+  pub reps: uint,
+  pub parser: &'a Parser<'a, I, O> + 'a
 }
 
-impl<'a> Parser<'a, Captures<'a>> for RegexParser {
-  fn parse(&self, data: &'a str) -> ParseResult<'a, Captures<'a>> {
-    match self.regex.captures(data) {
-      Some(cap) => {
-        let start = cap.at(0).len();
-        Ok((cap, data.slice_from(start)))
-      }
-      _ => Err(format!("no match or match not on first bye"))
-    }
-  }
-}
-  
-
-
-
-pub struct RepParser<'a, T>{
-  reps: uint,
-  parser: &'a Parser<'a, T> + 'a
-}
-
-impl<'a, T> Parser<'a, Vec<T>> for RepParser<'a, T> {
-  fn parse(&self, data: &'a str) -> ParseResult<'a, Vec<T>> {
-    let mut v: Vec<T> = Vec::new();
+impl<'a, I, O> Parser<'a, I, Vec<O>> for RepParser<'a, I, O> {
+  fn parse(&self, data: I) -> ParseResult<'a, I, Vec<O>> {
     let mut remain = data;
+    let mut v: Vec<O> = Vec::new();
     for i in range(0, self.reps) {
       match self.parser.parse(remain) {
         Ok((result, rest)) => {
@@ -88,14 +68,15 @@ impl<'a, T> Parser<'a, Vec<T>> for RepParser<'a, T> {
   }
 }
 
-pub struct DualParser<'a, A, B> {
-  first: &'a Parser<'a, A> + 'a,
-  second: &'a Parser<'a, B> + 'a
+
+pub struct DualParser<'a, I, A, B> {
+  first: &'a Parser<'a, I, A> + 'a,
+  second: &'a Parser<'a, I, B> + 'a
 }
 
-impl <'a, A, B> Parser<'a, (A,B)> for DualParser<'a, A, B> {
+impl <'a, I, A, B> Parser<'a, I, (A,B)> for DualParser<'a, I, A, B> {
   
-  fn parse(&self, data: &'a str) -> ParseResult<'a, (A, B)> {
+  fn parse(&self, data: I) -> ParseResult<'a, I, (A, B)> {
     /*  doesn't work :(
     self.first.parse(data).and_then(
       |(a, d2)| self.second.parse(d2).and_then(
@@ -113,31 +94,53 @@ impl <'a, A, B> Parser<'a, (A,B)> for DualParser<'a, A, B> {
   }
 }
 
+#[deriving(Show)]
 pub enum Or<A,B> {
   OrA(A),
   OrB(B),
 }
 
-pub struct OrParser<'a, A, B> {
-  a: &'a Parser<'a, A> + 'a,
-  b: &'a Parser<'a, B> + 'a
+pub struct OrParser<'a, I, A, B> {
+  pub a: &'a Parser<'a, I, A> + 'a,
+  pub b: &'a Parser<'a, I, B> + 'a
 }
 
-impl<'a, A, B> Parser<'a, Or<A,B>> for OrParser<'a, A, B> {
-  fn parse(&self, data: &'a str) -> ParseResult<'a, Or<A, B>> {
-    match self.a.parse(data) {
+/*
+ * Notice that I needs to be cloneable because we have to be able to hand it off to each parser
+ */
+impl<'a, I: Clone, A, B> Parser<'a, I, Or<A,B>> for OrParser<'a, I, A, B> {
+  fn parse(&self, data: I) -> ParseResult<'a, I, Or<A, B>> {
+    match self.a.parse(data.clone()) {
       Ok((a, d2)) => Ok((OrA(a), d2)),
-      Err(err) => match self.b.parse(data) {
+      Err(err) => match self.b.parse(data.clone()) {
         Ok((b, remain)) => Ok((OrB(b), remain)),
         Err(err) => Err(err)
       }
     }
   }
 }
-  
-  
-  
 
+pub struct OneOfParser<'a, I, O> {
+  parsers: &'a [&'a Parser<'a, I, O> + 'a]
+}
+
+impl<'a, I: Clone, O> Parser<'a, I, O> for OneOfParser<'a, I, O> {
+  fn parse(&self, data: I) -> ParseResult<'a, I, O> {
+    for p in self.parsers.iter() {
+      let res = p.parse(data.clone());
+      if res.is_ok() {
+        return res;
+      }
+    }
+    Err(format!("All options failed"))
+  }
+}
+      
+      
+
+
+  
+/*
   
 
 #[test]
@@ -154,6 +157,7 @@ fn test_char() {
   }
 }
 
+/*
 #[test]
 fn test_regex() {
   let reg = regex!("ab[cd]");
@@ -161,6 +165,7 @@ fn test_regex() {
   let data = "abdabc";
   assert!(parser_a.parse(data) == Ok(("abd", "abc")));
 }
+*/
 
 #[test]
 fn test_rep() {
@@ -220,5 +225,5 @@ fn test_or() {
 
 
 
-  
+ */ 
     
