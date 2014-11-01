@@ -28,11 +28,6 @@ fn main() {
   run(&prog);
   */
 
-  let p2 = "x = 3 + 4";
-  let t = tokenize(p2);
-  for x in t.iter() {
-    println!("{}", x);
-  }
 
 
   /*
@@ -47,6 +42,7 @@ fn main() {
     parser: &OrParser{a: box |&:| box match_num as Box<Parser<&[Token], int>>, b: box |&:| box LiteralParser{literal: Equals} as Box<Parser<&[Token], Token>>}
   };
   */
+  type TokenParser<'a> = Parser<'a, &'a[Token], Expr> + 'a;
 
   fn expr<'a>() -> Box<Parser<'a, &'a [Token], Expr> + 'a> {
 
@@ -57,7 +53,7 @@ fn main() {
       }}
     }
 
-    let plus = |&:| {
+    fn plus<'a>() -> MapParser<'a, &'a[Token], Token, Expr, Parser<'a, &'a[Token], Expr> + 'a> {
       MapParser{
         parser: RepSepParser{
           rep: match_num(),
@@ -66,31 +62,44 @@ fn main() {
         },
         mapper: box |&: ops: Vec<Expr>| Plus(ops)
       }
+    }
+
+    fn simple_expr<'a>() -> OrParser<'a, &'a[Token], Expr, TokenParser<'a>, TokenParser<'a>> {
+      OrParser{
+        b: box |&:| match_num() ,
+        a: box |&:| plus()
+      }
+    }
+
+
+    fn mult<'a>() -> MapParser<'a, &'a[Token], Token, Expr, TokenParser<'a>> {
+      MapParser{
+        parser: RepSepParser{
+          rep: simple_expr.call(()).call(()),
+          sep: literal(MultSign),
+          min_reps : 2
+        },
+        mapper: box |&: ops: Vec<Expr>| Mult(ops)
+      }
+    }
+
+    let expr = OrParser{
+      a: box |&:| mult(),
+      b: box |&:| simple_expr(),
     };
 
-    let simple_expr = OrParser{
-      b: box |&:| match_num() ,
-      a: box plus 
-    };
-
-    let mult = MapParser{
-      parser: RepSepParser{
-        rep: simple_expr,
-        sep: literal(MultSign),
-        min_reps : 2
-      },
-      mapper: box |&: ops: Vec<Expr>| Mult(ops)
-    };
-
-    box mult
+    box expr
   }
 
-  let e = [Number(11), MultSign, Number(13), PlusSign, Number(14)];
-
+  //let e = [Number(11), MultSign, Number(13), MultSign, Number(17), PlusSign, Number(14)];
+  
+  let p2 = "3 + 4 + 5 + 6";
   let parser = expr();
-  println!("{}", parser.parse(&e));
-
-
+  let tokens = tokenize(p2);
+  match parser.parse(tokens.as_slice()) {
+    Ok((exp, _)) => {println!("{}", eval(&exp, &HashMap::new()));}
+    Err(err) => {println!("Parse Error: {}", err);}
+  };
 
 
 }

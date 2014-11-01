@@ -15,9 +15,10 @@ pub type ParseResult<'a, I:'a, O> = Result<(O, I), String>;
 pub trait Parser<'a, I, O> {
 
   fn parse(&self, data: I) -> ParseResult<'a, I, O>;
+  //don't work
   /*
-  fn and_then<B>(&'a self, next: &'a Parser<'a, I, B>) -> DualParser<'a, I, O ,B> {
-    DualParser{first: self, second: next}
+  fn and_then<B, X: Parser<'a, I, O>, Y: Parser<'a, I, B>>(self, next: Y) -> DualParser<'a, I, O ,B, X, Y> {
+    DualParser{first: self as X, second: next}
   }
   */
   /*
@@ -156,9 +157,7 @@ impl <'a, I, A, B, X: Parser<'a, I, A>, Y: Parser<'a, I, B>> Parser<'a, I, (A,B)
   }
 }
 
-//pub type ParserGenerator<'a, I , O> = Box<Fn<(), &'a Parser<'a, I, O> + 'a> + 'a>; //wat
-pub type ParserGenerator<'a, I , O> = Box<Fn<(), Box<Parser<'a, I, O> + 'a> + 'a> + 'a>; //wat
-
+//we need lazy evaluation to be able to support recursive grammars!
 pub struct OrParser<'a, I, O, A: Parser<'a, I, O>, B: Parser<'a, I, O>> {
   pub a: Box<Fn<(), A> + 'a>,
   pub b: Box<Fn<(), B> + 'a>
