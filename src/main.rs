@@ -88,32 +88,32 @@ fn main() {
       }
     }
 
-    fn plus<'a>() -> LParser<'a> {
+    fn mult<'a>() -> LParser<'a> {
       box MapParser{
         parser: box RepSepParser{
           rep: term(),
-          sep: literal(PlusSign),
+          sep: literal(MultSign),
           min_reps : 2
         },
-        mapper: box |&: ops: Vec<Expr>| Plus(ops)
+        mapper: box |&: ops: Vec<Expr>| Mult(ops)
       }
     }
 
     fn simple_expr<'a>() -> LParser<'a> {
       box OrParser{
         b: box |&:| term(), 
-        a: box |&:| plus() 
+        a: box |&:| mult() 
       }
     }
 
-    fn mult<'a>() -> LParser<'a> {
+    fn plus<'a>() -> LParser<'a> {
       box MapParser{
         parser: box RepSepParser{
           rep: simple_expr(),
-          sep: literal(MultSign),
+          sep: literal(PlusSign),
           min_reps : 2
         },
-        mapper: box |&: ops: Vec<Expr>| Mult(ops)
+        mapper: box |&: ops: Vec<Expr>| Plus(ops)
       }
     }
 
@@ -131,7 +131,7 @@ fn main() {
     }
 
     let expr = box OrParser{
-        a: box |&:| mult(),
+        a: box |&:| plus(),
         b: box |&:| simple_expr(),
     };
 
@@ -140,7 +140,7 @@ fn main() {
 
   //let e = [Number(11), MultSign, Number(13), MultSign, Number(17), PlusSign, Number(14)];
   
-  let p2 = "x = 3 + 4 \n y = 3 \n out ( x * y ) + y";
+  let p2 = "x = ( 3 + 4 ) * 3 \n out x + 7 * x";
   
   let parser = statement();
   let tokens = tokenize(p2);
