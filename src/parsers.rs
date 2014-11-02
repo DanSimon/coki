@@ -1,8 +1,8 @@
 
 use std::ops::Fn;
 
-pub fn literal<'a, T:'a + Eq>(literal: T) -> LiteralParser<'a, T> {
-  LiteralParser{literal: literal}
+pub fn literal<'a, T:'a + Eq + Clone>(literal: T) -> Box<Parser<'a, &'a[T], T> + 'a> {
+  box LiteralParser{literal: literal}
 }
 /*
 pub fn matcher<'a, I, O>(m: &'a Fn<(&'a I,), Result<O, String>>) -> MatchParser<'a, I, O> {
@@ -31,7 +31,6 @@ pub trait Parser<'a, I, O> {
   }
   */
 }
-
 
 
 trait TokenParser<'a, I, O> : Parser<'a, Vec<I>, O> {
@@ -71,22 +70,22 @@ impl<'a, I: Clone, O> Parser<'a, &'a [I], O> for MatchParser<'a, I, O> {
     
 
 pub struct RepParser<'a, I, O>{
-  pub reps: uint,
-  pub parser: &'a Parser<'a, I, O> + 'a
+  pub parser: Box<Parser<'a, I, O> + 'a>
 }
 
-impl<'a, I, O> Parser<'a, I, Vec<O>> for RepParser<'a, I, O> {
+impl<'a, I: Clone, O> Parser<'a, I, Vec<O>> for RepParser<'a, I, O> {
   fn parse(&self, data: I) -> ParseResult<'a, I, Vec<O>> {
     let mut remain = data;
     let mut v: Vec<O> = Vec::new();
-    for i in range(0, self.reps) {
-      match self.parser.parse(remain) {
+    let mut done = false;
+    while done == false {
+      match self.parser.parse(remain.clone()) {
         Ok((result, rest)) => {
           v.push(result);
           remain = rest;
         }
         Err(err) => {
-          return Err(format!("Error on rep #{}: {}", i, err));
+          return Ok((v, remain));
         }
       }
     }
@@ -95,12 +94,12 @@ impl<'a, I, O> Parser<'a, I, Vec<O>> for RepParser<'a, I, O> {
 }
 
 //sep should return a Failure when it's time to stop repeating, the ok value is never used
-pub struct RepSepParser<'a, I, O, U, A: Parser<'a, I, O>, B: Parser<'a, I, U>> {
-  pub rep: A,
-  pub sep: B,
+pub struct RepSepParser<'a, I, O, U> {
+  pub rep: Box<Parser<'a, I, O> + 'a>,
+  pub sep: Box<Parser<'a, I, U> + 'a>,
   pub min_reps: uint,
 }
-impl<'a, I: Clone, O, U, A: Parser<'a, I, O>, B: Parser<'a, I, U>> Parser<'a, I, Vec<O>> for RepSepParser<'a, I, O, U, A, B> {
+impl<'a, I: Clone, O, U> Parser<'a, I, Vec<O>> for RepSepParser<'a, I, O, U> {
   fn parse(&self, data: I) -> ParseResult<'a, I, Vec<O>> {
     let mut remain = data;
     let mut v: Vec<O> = Vec::new();    
@@ -132,21 +131,14 @@ impl<'a, I: Clone, O, U, A: Parser<'a, I, O>, B: Parser<'a, I, U>> Parser<'a, I,
   
 
 
-pub struct DualParser<'a, I, A, B, X: Parser<'a, I, A>, Y: Parser<'a, I, B>> {
-  pub first: X,
-  pub second: Y
+pub struct DualParser<'a, I, A, B> {
+  pub first: Box<Parser<'a, I, A> + 'a>,
+  pub second: Box<Parser<'a, I, B> + 'a>
 }
 
-impl <'a, I, A, B, X: Parser<'a, I, A>, Y: Parser<'a, I, B>> Parser<'a, I, (A,B)> for DualParser<'a, I, A, B, X, Y> {
+impl <'a, I, A, B> Parser<'a, I, (A,B)> for DualParser<'a, I, A, B> {
   
   fn parse(&self, data: I) -> ParseResult<'a, I, (A, B)> {
-    /*  doesn't work :(
-    self.first.parse(data).and_then(
-      |(a, d2)| self.second.parse(d2).and_then(
-        |(b, remain)| Ok(((a, b), remain))
-      )
-    )
-    */
     match self.first.parse(data) {
       Ok((a, d2)) => match self.second.parse(d2) {
         Ok((b, remain)) => Ok(((a, b), remain)),
@@ -158,15 +150,15 @@ impl <'a, I, A, B, X: Parser<'a, I, A>, Y: Parser<'a, I, B>> Parser<'a, I, (A,B)
 }
 
 //we need lazy evaluation to be able to support recursive grammars!
-pub struct OrParser<'a, I, O, A: Parser<'a, I, O>, B: Parser<'a, I, O>> {
-  pub a: Box<Fn<(), A> + 'a>,
-  pub b: Box<Fn<(), B> + 'a>
+pub struct OrParser<'a, I, O> {
+  pub a: Box<Fn<(), Box<Parser<'a, I, O> + 'a> + 'a> + 'a>,
+  pub b: Box<Fn<(), Box<Parser<'a, I, O> + 'a> + 'a> + 'a>
 }
 
 /*
  * Notice that I needs to be cloneable because we have to be able to hand it off to each parser
  */
-impl<'a, I: Clone, O, A: Parser<'a, I, O>, B: Parser<'a, I, O>> Parser<'a, I, O> for OrParser<'a, I, O, A, B> {
+impl<'a, I: Clone, O> Parser<'a, I, O> for OrParser<'a, I, O> {
   fn parse(&self, data: I) -> ParseResult<'a, I, O> {
     match self.a.call(()).parse(data.clone()) {
       Ok((a, d2)) => Ok((a, d2)),
@@ -179,13 +171,13 @@ impl<'a, I: Clone, O, A: Parser<'a, I, O>, B: Parser<'a, I, O>> Parser<'a, I, O>
 }
 
 pub struct OneOfParser<'a, I, O> {
-  parsers: &'a [&'a Parser<'a, I, O> + 'a]
+  parsers: Vec<Box<Fn<(), Box<Parser<'a, I, O> + 'a> + 'a> + 'a> + 'a>
 }
 
 impl<'a, I: Clone, O> Parser<'a, I, O> for OneOfParser<'a, I, O> {
   fn parse(&self, data: I) -> ParseResult<'a, I, O> {
     for p in self.parsers.iter() {
-      let res = p.parse(data.clone());
+      let res = p.call(()).parse(data.clone());
       if res.is_ok() {
         return res;
       }
@@ -194,11 +186,11 @@ impl<'a, I: Clone, O> Parser<'a, I, O> for OneOfParser<'a, I, O> {
   }
 }
 
-pub struct MapParser<'a, I, O, U, A: Parser<'a, I, O>> {
-  pub parser: A,
+pub struct MapParser<'a, I, O, U> {
+  pub parser: Box<Parser<'a, I, O> + 'a>,
   pub mapper: Box<Fn<(O,), U> +'a>, //this has to be a &Fn and not a regular lambda since it must be immutable
 }
-impl<'a, I, O, U, A: Parser<'a, I, O>> Parser<'a, I, U> for MapParser<'a, I, O, U, A> {
+impl<'a, I, O, U> Parser<'a, I, U> for MapParser<'a, I, O, U> {
   fn parse(&self, data: I) -> ParseResult<'a, I, U> {
     self.parser.parse(data).map(|(output, input)| ((self.mapper.call((output,)), input)))
   }
