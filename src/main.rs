@@ -1,6 +1,7 @@
 #![feature(globs)]
 #![feature(phase)]
 #![feature(unboxed_closures)]
+#![feature(macro_rules)]
 //extern crate regex_macros;
 //extern crate regex;
 //extern crate parsers;
@@ -42,62 +43,68 @@ fn main() {
     parser: &OrParser{a: box |&:| box match_num as Box<Parser<&[Token], int>>, b: box |&:| box LiteralParser{literal: Equals} as Box<Parser<&[Token], Token>>}
   };
   */
-  type TokenParser<'a> = Parser<'a, &'a[Token], Expr> + 'a;
 
   fn expr<'a>() -> Box<Parser<'a, &'a [Token], Expr> + 'a> {
 
     fn match_num<'a>() -> MatchParser<'a Token, Expr> {
-      MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match *input {
-        Number(num) => Ok(Num(num)),
-        _ => Err(format!("wrong type"))
+      MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match input {
+        &Number(num) => Ok(Num(num)),
+        other => Err(format!("wrong type, expected number, got {}", other))
       }}
     }
 
-    fn plus<'a>() -> MapParser<'a, &'a[Token], Token, Expr, Parser<'a, &'a[Token], Expr> + 'a> {
-      MapParser{
-        parser: RepSepParser{
-          rep: match_num(),
-          sep: literal(PlusSign),
-          min_reps : 2
-        },
-        mapper: box |&: ops: Vec<Expr>| Plus(ops)
+    macro_rules! plus {
+      () => {
+        MapParser{
+          parser: RepSepParser{
+            rep: match_num(),
+            sep: literal(PlusSign),
+            min_reps : 2
+          },
+          mapper: box |&: ops: Vec<Expr>| Plus(ops)
+        }
       }
-    }
-
-    fn simple_expr<'a>() -> OrParser<'a, &'a[Token], Expr, TokenParser<'a>, TokenParser<'a>> {
-      OrParser{
-        b: box |&:| match_num() ,
-        a: box |&:| plus()
-      }
-    }
-
-
-    fn mult<'a>() -> MapParser<'a, &'a[Token], Token, Expr, TokenParser<'a>> {
-      MapParser{
-        parser: RepSepParser{
-          rep: simple_expr.call(()).call(()),
-          sep: literal(MultSign),
-          min_reps : 2
-        },
-        mapper: box |&: ops: Vec<Expr>| Mult(ops)
-      }
-    }
-
-    let expr = OrParser{
-      a: box |&:| mult(),
-      b: box |&:| simple_expr(),
     };
 
-    box expr
+    macro_rules! simple_expr{
+      () => {
+        OrParser{
+          b: box |&:| match_num() ,
+          a: box |&:| plus!() 
+        }
+      }
+    };
+
+    let mult = box |&:| MapParser{
+      parser: RepSepParser{
+        rep: simple_expr!(),
+        sep: literal(MultSign),
+        min_reps : 2
+      },
+      mapper: box |&: ops: Vec<Expr>| Mult(ops)
+    };
+
+    let expr = box OrParser{
+      a: mult,
+      b: box |&:| simple_expr!(),
+    };
+
+    expr
   }
 
   //let e = [Number(11), MultSign, Number(13), MultSign, Number(17), PlusSign, Number(14)];
   
-  let p2 = "3 + 4 + 5 + 6";
+  let p2 = "4 * 6 + 3 + * 5 * 2";
   let parser = expr();
   let tokens = tokenize(p2);
   match parser.parse(tokens.as_slice()) {
-    Ok((exp, _)) => {println!("{}", eval(&exp, &HashMap::new()));}
+    Ok((exp, rest)) => {
+      if rest.len() > 0 {
+        println!("Error: unpexpected token {}", rest[0]);
+      } else {
+        println!("{}", eval(&exp, &HashMap::new()));
+      }
+    }
     Err(err) => {println!("Parse Error: {}", err);}
   };
 
@@ -116,7 +123,16 @@ fn tokenize<'a>(input: &'a str) -> Vec<Token> {
         "*" => {build.push(MultSign);}
         "out" => {build.push(OutputCmd)}
         "" => {}
-        other => { build.push(Ident(String::from_str(other)))}
+        other => {
+          match from_str(other) {
+            Some(num) => {
+              build.push(Number(num));
+            }
+            None => {
+              build.push(Ident(String::from_str(other)));
+            }
+          }
+        }
       };
     }
     build.push(NewLine);
@@ -179,7 +195,7 @@ fn eval(expr: &Expr, env: &HashMap<&str, int>) -> Result<int, String> {
       for op in ops.iter() {
         match eval(op, env) {
           Ok(value) => {
-            total += value;
+            total *= value;
           }
           Err(err) => {
             return Err(err);
