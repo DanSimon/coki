@@ -1,41 +1,29 @@
 
 use std::ops::Fn;
+use regex::{Captures, Regex};
+
 
 pub fn literal<'a, T:'a + Eq + Clone>(literal: T) -> Box<Parser<'a, &'a[T], T> + 'a> {
   box LiteralParser{literal: literal}
 }
-/*
-pub fn matcher<'a, I, O>(m: &'a Fn<(&'a I,), Result<O, String>>) -> MatchParser<'a, I, O> {
-  MatchParser{matcher: box *m}
-}
-*/
 
 pub type ParseResult<'a, I:'a, O> = Result<(O, I), String>;
+
 
 pub trait Parser<'a, I, O> {
 
   fn parse(&self, data: I) -> ParseResult<'a, I, O>;
-  //don't work
+
   /*
-  fn and_then<B, X: Parser<'a, I, O>, Y: Parser<'a, I, B>>(self, next: Y) -> DualParser<'a, I, O ,B, X, Y> {
-    DualParser{first: self as X, second: next}
-  }
-  */
-  /*
-  fn or<B>(&'a self, next: &'a Parser<'a, I, B>) -> OrParser<'a, I, O, B> {
-    OrParser{a: box |&:| self, b: box |&:| next}
-  }*/
-  /*
-  fn map<B>(&'a self, f: &'a Fn<(O,), B>) -> MapParser<'a, I, O, B> {
-    MapParser{parser: self, mapper: f}
+  fn or(self, p: Box<Parser<'a, I, O> + 'a>) -> Box<Parser<'a, I, O>> {
+    box OrParser{
+      a: box self,
+      b: p,
+    }
   }
   */
 }
 
-
-trait TokenParser<'a, I, O> : Parser<'a, Vec<I>, O> {
-
-}
 
 pub struct LiteralParser<'a, T:'a + Eq> {
   pub literal: T,
@@ -53,6 +41,35 @@ impl<'a, T: 'a + Eq + Clone> Parser<'a,  &'a [T], T> for LiteralParser<'a, T> {
     }
   }
 }
+
+pub struct RegexLiteralParser<'a> {
+  pub regex: Regex,
+}
+
+impl<'a> Parser<'a, &'a str, ()> for RegexLiteralParser<'a> {
+  fn parse(&self, data: &'a str) -> ParseResult<'a, &'a str, ()> {
+    self.regex.find(data).map(|(s, e)| ((), data.slice_from(e))).ok_or(format!("regex literal match fail"))
+  }
+}
+
+pub struct RegexCapturesParser<'a> {
+  pub regex: Regex,
+}
+impl<'a> Parser<'a, &'a str, Captures<'a>> for RegexCapturesParser<'a> {
+  fn parse(&self, data: &'a str) -> ParseResult<'a, &'a str, Captures<'a>> {
+    match self.regex.captures(data) {
+      Some(caps) => match caps.pos(0) {
+        Some((s, e)) => Ok((caps, data.slice_from(e))),
+        None => Err(format!("No Match"))
+      },
+      None => Err(format!("No Match"))
+    }
+  }
+}
+
+
+
+
 
 pub struct MatchParser<'a, I, O> {
   pub matcher: Box< Fn<(&'a I,), Result<O, String>> +'a>
