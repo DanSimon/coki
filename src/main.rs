@@ -21,29 +21,39 @@ pub mod grammar;
 fn main() {
 
 
-  //let e = [Number(11), MultSign, Number(13), MultSign, Number(17), PlusSign, Number(14)];
-  let s = "a b \r\n c ";
-  let lexer = token();
-  println!("{}", lexer.parse(s));
   
   let p2 = "x = ( 3 + 4 ) * 3
   y = 6 + x
-  out x + 7 * y";
+  out x + 7 * y
+  ";
+
+  let lexer = token();
+  println!("{}", lexer.parse(p2));
   
-  let parser = statement();
   let tokens = tokenize(p2);
-  match parser.parse(tokens.as_slice()) {
-    Ok((exp, rest)) => {
-      if rest.len() > 0 {
-        println!("Error: unexpected token {}", rest[0]);
+  match lexer.parse(p2) {
+    Ok((mut tokens, rest)) => {
+      if rest != "" {
+        println!("Parser error at: {}", rest)
       } else {
-        run(&exp);
+        //tokens.push(NewLine);//so user doesn't have to have a terminating \n
+        let parser = statement();
+        match parser.parse(tokens.as_slice()) {
+          Ok((exp, rest)) => {
+            if rest.len() > 0 {
+              println!("Error: unexpected token {}", rest[0]);
+            } else {
+              run(&exp);
+            }
+          }
+          Err(err) => {println!("Parse Error: {}", err);}
+        };
       }
+    },
+    Err(err) => {
+      println!("Lexer error: {}", err);
     }
-    Err(err) => {println!("Parse Error: {}", err);}
   };
-
-
 }
 
 fn tokenize<'a>(input: &'a str) -> Vec<Token> {

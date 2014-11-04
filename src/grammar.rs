@@ -38,6 +38,12 @@ pub macro_rules! or {
       a: box |&:| $a,
       b: box |&:| $b,
     }
+  };
+  ($a: expr, $b: expr, $c: expr) => {
+    box OrParser{
+      a: box |&:| $a,
+      b: box |&:| or!($b, $c),
+    }
   }
 }
 
@@ -61,20 +67,48 @@ pub macro_rules! link {
 
 type Lexer<'a> = Box<Parser<'a, &'a str, Token> + 'a>;
 
-pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
+pub fn token<'a>() -> Lexer<'a> {
 
-  fn newline<'a>() -> Lexer<'a> { map!(
-    box RegexLiteralParser{regex : Regex::new("$(\\r\\n)+").unwrap()},
-    |&: ()| NewLine
-  )}
+  macro_rules! literal{
+    ($reg: expr, $lit: expr ) => {map!(
+      box RegexLiteralParser{regex : Regex::new($reg).unwrap()},
+      |&: ()| $lit
+    ) as Lexer<'a>}
+  }
+
+  macro_rules! lor{
+    ($a: expr, $b: expr) => (or!($a,$b) as Lexer<'a>)
+  }
 
   fn ident<'a>() -> Lexer<'a> { map!(
-    box RegexCapturesParser{regex : Regex::new(r"$[ \t]*([a-z]+)[ \t]*").unwrap()},
+    box RegexCapturesParser{regex : Regex::new(r"^[ \t]*([a-z]+)[ \t]*").unwrap()},
     |&: caps: Captures<'a>| Ident(from_str(caps.at(1)).unwrap())
   )}
 
+  fn number<'a>() -> Lexer<'a> { map!(
+    box RegexCapturesParser{regex : Regex::new(r"^[ \t]*(\d+)[ \t]*").unwrap()},
+    |&: caps: Captures<'a>| Number(from_str(caps.at(1)).unwrap())
+  )}
+
   box RepParser{
-    parser: or!(ident(), newline())
+    parser: lor!(
+      literal!(r"^[ \t]*out", OutputCmd),
+      lor!(
+      literal!(r"^[ \t]*\r?\n[ \t]*", NewLine),
+      lor!(
+      literal!(r"^[ \t]*\(", OpenParen),
+      lor!(
+      literal!(r"^[ \t]*\)", CloseParen),
+      lor!(
+      number(),
+      lor!(
+      literal!(r"^[ \t]*\+", PlusSign),
+      lor!(
+      literal!(r"^[ \t]*=", Equals),
+      lor!(
+      ident(), 
+      literal!(r"^[ \t]*\*", MultSign)
+      ))))))))
   }
 
 }
