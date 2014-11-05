@@ -10,87 +10,52 @@ use std::collections::HashMap;
 use parsers::*;
 use grammar::*;
 use regex::*;
+use std::os;
+use std::io::{File, Command};
+
 
 pub mod parsers;
 pub mod grammar;
 
-
-
-
-
 fn main() {
-
-
   
-  let p2 = "x = ( 3 + 4 ) * 3
-  y = 6 + x
-  out x + 7 * y
-  ";
+  let args = os::args();
 
-  let lexer = token();
-  println!("{}", lexer.parse(p2));
+  let file = &args[1];
   
-  let tokens = tokenize(p2);
-  match lexer.parse(p2) {
-    Ok((mut tokens, rest)) => {
-      if rest != "" {
-        println!("Parser error at: {}", rest)
-      } else {
-        //tokens.push(NewLine);//so user doesn't have to have a terminating \n
-        let parser = statement();
-        match parser.parse(tokens.as_slice()) {
-          Ok((exp, rest)) => {
-            if rest.len() > 0 {
-              println!("Error: unexpected token {}", rest[0]);
-            } else {
-              run(&exp);
-            }
-          }
-          Err(err) => {println!("Parse Error: {}", err);}
-        };
-      }
-    },
-    Err(err) => {
-      println!("Lexer error: {}", err);
-    }
-  };
-}
+  let contents = File::open(&Path::new(file.as_slice())).read_to_string();
 
-fn tokenize<'a>(input: &'a str) -> Vec<Token> {
-  let mut lines = input.split('\n');
-  let mut build: Vec<Token> = Vec::new();
-  for line in lines {
-    let mut toks = line.split(' ');
-    for tok in toks {
-      match tok.trim() {
-        "=" => {build.push(Equals);}
-        "+" => {build.push(PlusSign);}
-        "*" => {build.push(MultSign);}
-        "(" => {build.push(OpenParen);}
-        ")" => {build.push(CloseParen);}
-        "out" => {build.push(OutputCmd)}
-        "" => {}
-        other => {
-          match from_str(other) {
-            Some(num) => {
-              build.push(Number(num));
-            }
-            None => {
-              build.push(Ident(String::from_str(other)));
-            }
+  match contents {
+    Ok(raw) => {
+      let lexer = token();
+      match lexer.parse(raw.as_slice()) {
+        Ok((mut tokens, rest)) => {
+          if rest != "" {
+            println!("Parser error at: {}", rest)
+          } else {
+            let parser = statement();
+            match parser.parse(tokens.as_slice()) {
+              Ok((exp, rest)) => {
+                if rest.len() > 0 {
+                  println!("Error: unexpected token {}", rest[0]);
+                } else {
+                  run(&exp);
+                }
+              }
+              Err(err) => {println!("Parse Error: {}", err);}
+            };
           }
+        },
+        Err(err) => {
+          println!("Lexer error: {}", err);
         }
-      };
+      }
     }
-    build.push(NewLine);
+    Err(err) => {println!("Error Reading File: {}", err);}
   }
-  build
+
 }
 
-/*
-trait TokenParser<T> {
-  fn parse<'a>(tokens: &'a [Token]>)
-*/
 
 fn run(prog: &Vec<Statement>) {
   let mut env: HashMap<String, int> = HashMap::new();

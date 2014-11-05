@@ -3,12 +3,25 @@
 use parsers::*;
 use regex::{Captures, Regex};
 
+pub enum AddOp {
+  Add,
+  Subtract,
+}
+
+pub enum MultOp {
+  Multiply,
+  Divide,
+}
+
+type AddTerm = (AddOp, Expr);
+type MultTerm = (MultOp, Expr);
+
 #[deriving(Show)]
 pub enum Expr {
   Variable(String),  
   Num(int),
-  Plus(Vec<Expr>), //a + b + c + d
-  Mult(Vec<Expr>)
+  AddSub(Vec<AddTerm>), //a + b - c + d becomes [(+ a) (+ b) (- c) (+ d)]
+  MultDiv(Vec<MultTerm>), 
 }
 
 pub enum Statement {
@@ -25,7 +38,9 @@ pub enum Token {
   Ident(String),
   Number(int),
   PlusSign,
+  MinusSign,
   MultSign,
+  DivideSign,
   OutputCmd,
   NewLine,
   OpenParen,
@@ -65,9 +80,18 @@ pub macro_rules! link {
   }
 }
 
+pub macro_rules! repsep {
+  ($rep: expr, $sep: expr) => {
+    box RepSepParser{
+      rep: $rep,
+      sep: $sep,
+    }
+  }
+}
+
 type Lexer<'a> = Box<Parser<'a, &'a str, Token> + 'a>;
 
-pub fn token<'a>() -> Lexer<'a> {
+pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
 
   macro_rules! literal{
     ($reg: expr, $lit: expr ) => {map!(
@@ -193,6 +217,11 @@ fn expr<'a>() -> LParser<'a> {
       },
       mapper: box |&: ops: Vec<Expr>| Mult(ops)
     }
+  }
+
+  //nope - need way of encoding x * y / z * w, maybe Vec<(term, op)> where op is * or /
+  fn divide<'a>() -> LParser<'a> {
+    map!(repsep!(term(), literal(DivideSign)), |&: ops: Vec<Expr>| Divide(ops))
   }
 
   fn simple_expr<'a>() -> LParser<'a> {
