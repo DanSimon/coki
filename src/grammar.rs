@@ -3,6 +3,7 @@
 use parsers::*;
 use regex::{Captures, Regex};
 
+/*
 pub enum AddOp {
   Add,
   Subtract,
@@ -12,16 +13,21 @@ pub enum MultOp {
   Multiply,
   Divide,
 }
+*/
 
-type AddTerm = (AddOp, Expr);
-type MultTerm = (MultOp, Expr);
+//type AddTerm = (AddOp, Expr);
+//type MultTerm = (MultOp, Expr);
 
 #[deriving(Show)]
 pub enum Expr {
   Variable(String),  
   Num(int),
-  AddSub(Vec<AddTerm>), //a + b - c + d becomes [(+ a) (+ b) (- c) (+ d)]
-  MultDiv(Vec<MultTerm>), 
+  Plus(Vec<Expr>),
+  //Minus(Vec<Expr>),
+  Mult(Vec<Expr>),
+  //Divide(Vec<Expr>),
+  //AddSub(Vec<AddTerm>), //a + b - c + d becomes [(+ a) (+ b) (- c) (+ d)]
+  //MultDiv(Vec<MultTerm>), 
 }
 
 pub enum Statement {
@@ -48,19 +54,35 @@ pub enum Token {
 }
 
 pub macro_rules! or {
-  ($a: expr, $b: expr) => {
+  ($a: expr, $b: expr ) => {
     box OrParser{
       a: box |&:| $a,
       b: box |&:| $b,
     }
   };
-  ($a: expr, $b: expr, $c: expr) => {
+  ($a: expr, $b: expr $(, $c: expr)*) => {
     box OrParser{
       a: box |&:| $a,
-      b: box |&:| or!($b, $c),
+      b: box |&:| or!($b, $($c),*),
     }
   }
 }
+
+pub macro_rules! seq {
+  ($a: expr, $b: expr ) => {
+    box DualParser{
+      a: $a,
+      b: $b,
+    }
+  };
+  ($a: expr, $b: expr $(, $c: expr)*) => {
+    box DualParser{
+      a: $a,
+      b: seq!($b, $($c),*),
+    }
+  }
+}
+  
 
 pub macro_rules! map {
   ($a: expr, $b: expr) => {
@@ -81,10 +103,11 @@ pub macro_rules! link {
 }
 
 pub macro_rules! repsep {
-  ($rep: expr, $sep: expr) => {
+  ($rep: expr, $sep: expr, $min: expr) => {
     box RepSepParser{
       rep: $rep,
       sep: $sep,
+      min_reps: $min,
     }
   }
 }
@@ -217,11 +240,6 @@ fn expr<'a>() -> LParser<'a> {
       },
       mapper: box |&: ops: Vec<Expr>| Mult(ops)
     }
-  }
-
-  //nope - need way of encoding x * y / z * w, maybe Vec<(term, op)> where op is * or /
-  fn divide<'a>() -> LParser<'a> {
-    map!(repsep!(term(), literal(DivideSign)), |&: ops: Vec<Expr>| Divide(ops))
   }
 
   fn simple_expr<'a>() -> LParser<'a> {
