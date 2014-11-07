@@ -54,6 +54,18 @@ pub enum Token {
 }
 
 pub macro_rules! or {
+  ($a: expr, $b: expr : $typ: ty) => {
+    box OrParser{
+      a: box |&:| $a,
+      b: box |&:| $b,
+    } as $typ
+ };
+  ($a: expr, $b: expr $(, $c: expr)* : $typ: ty) => {
+    box OrParser{
+      a: box |&:| $a,
+      b: box |&:| or!($b, $($c),* : $typ),
+    } as $typ
+  };
   ($a: expr, $b: expr ) => {
     box OrParser{
       a: box |&:| $a,
@@ -65,7 +77,7 @@ pub macro_rules! or {
       a: box |&:| $a,
       b: box |&:| or!($b, $($c),*),
     }
-  }
+  };
 }
 
 pub macro_rules! seq {
@@ -123,10 +135,7 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
     ) as Lexer<'a>}
   }
 
-  macro_rules! lor{
-    ($a: expr, $b: expr) => (or!($a,$b) as Lexer<'a>)
-  }
-
+  //changing these to values creates weird conflicting lifetime errors
   fn ident<'a>() -> Lexer<'a> { map!(
     box RegexCapturesParser{regex : Regex::new(r"^[ \t]*([a-z]+)[ \t]*").unwrap()},
     |&: caps: Captures<'a>| Ident(from_str(caps.at(1)).unwrap())
@@ -138,25 +147,20 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
   )}
 
   box RepParser{
-    parser: lor!(
+    parser: or!(
       literal!(r"^[ \t]*out", OutputCmd),
-      lor!(
       literal!(r"^[ \t]*\r?\n[ \t]*", NewLine),
-      lor!(
       literal!(r"^[ \t]*\(", OpenParen),
-      lor!(
       literal!(r"^[ \t]*\)", CloseParen),
-      lor!(
       number(),
-      lor!(
       literal!(r"^[ \t]*\+", PlusSign),
-      lor!(
       literal!(r"^[ \t]*=", Equals),
-      lor!(
       ident(), 
       literal!(r"^[ \t]*\*", MultSign)
-      ))))))))
+      : Lexer<'a>
+    )
   }
+
 
 }
     
