@@ -46,32 +46,39 @@ pub enum Token {
   CloseParen,
 }
 
+
+//coercion fn needed for unboxed closures
+//without this all kinds of weird errors show up
+fn p<'a, I, O>(l: Box<Parser<'a, I, O> + 'a>) -> Box<Parser<'a, I, O> + 'a> {
+  l
+}
+
 pub macro_rules! or {
-  ($a: expr, $b: expr : $typ: ty) => {
-    box OrParser{
-      a: box |&:| $a,
-      b: box |&:| $b,
-    } as $typ
+  ($a: expr, $b: expr) => {
+    p(box OrParser{
+      a: box |&:| $a ,
+      b: box |&:| $b ,
+    }) 
  };
-  ($a: expr, $b: expr $(, $c: expr)* : $typ: ty) => {
-    box OrParser{
+  ($a: expr, $b: expr $(, $c: expr)* ) => {
+    p(box OrParser{
       a: box |&:| $a,
-      b: box |&:| or!($b, $($c),* : $typ),
-    } as $typ
+      b: box |&:| or!($b, $($c),*),
+    }) 
   };
 }
 pub macro_rules! seq {
-  ($a: expr, $b: expr : $typ: ty) => {
+  ($a: expr, $b: expr ) => {
     box DualParser{
       first: $a,
       second: $b,
-    } as $typ
+    } 
  };
-  ($a: expr, $b: expr $(, $c: expr)* : $typ: ty) => {
+  ($a: expr, $b: expr $(, $c: expr)* ) => {
     box DualParser{
       first: $a,
-      second: seq!($b, $($c),* : $typ),
-    } as $typ
+      second: seq!($b, $($c),* ),
+    } 
   };
 }
 
@@ -111,15 +118,20 @@ pub macro_rules! rep {
   }
 }
 
+
 type Lexer<'a> = Box<Parser<'a, &'a str, Token> + 'a>;
+
 
 pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
 
-  macro_rules! literal{
-    ($reg: expr, $lit: expr ) => {map!(
-      box RegexLiteralParser{regex : Regex::new($reg).unwrap()},
-      |&: ()| $lit
-    ) as Lexer<'a>}
+
+  macro_rules! literal {
+    ($reg: expr, $tok: expr) => {
+      p(map!(
+        box RegexLiteralParser{regex : Regex::new($reg).unwrap()},
+        |&: ()| $tok
+      ))
+    }
   }
 
   //changing these to values creates weird conflicting lifetime errors
@@ -132,6 +144,7 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
     box RegexCapturesParser{regex : Regex::new(r"^[ \t]*(\d+)[ \t]*").unwrap()},
     |&: caps: Captures<'a>| Number(from_str(caps.at(1)).unwrap())
   )}
+  
 
   box RepParser{
     parser: or!(
@@ -144,18 +157,16 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
       literal!(r"^[ \t]*=", Equals),
       ident(), 
       literal!(r"^[ \t]*\*", MultSign)
-      : Lexer<'a>
     )
   }
-
 
 }
     
 
-type LParser<'a> = Box<Parser<'a, &'a [Token], Expr> + 'a>;
+pub type LParser<'a, T> = Box<Parser<'a, &'a [Token], T> + 'a>;
 
 
-fn assign<'a>() -> Box<Parser<'a, &'a [Token], Statement> + 'a> {
+fn assign<'a>() -> LParser<'a, Statement> {
   box MapParser {
     parser: box DualParser {
       first: box DualParser {
@@ -171,7 +182,7 @@ fn assign<'a>() -> Box<Parser<'a, &'a [Token], Statement> + 'a> {
   }
 }
 
-fn output<'a>() -> Box<Parser<'a, &'a [Token], Statement> + 'a> {
+fn output<'a>() -> LParser<'a, Statement> {
   box MapParser {
     parser : box DualParser {
       first: literal(OutputCmd),
@@ -181,13 +192,12 @@ fn output<'a>() -> Box<Parser<'a, &'a [Token], Statement> + 'a> {
   }
 }
 
-pub fn statement<'a>() -> Box<Parser<'a, &'a [Token], Vec<Statement>> + 'a> {
+pub fn statement<'a>() -> LParser<'a, Vec<Statement>> {
   rep!(
     map!(
       seq!(
-        or!(output(), assign(): Box<Parser<'a, &'a [Token], Statement>>), 
+        or!(output(), assign()),
         literal(NewLine)
-        : Box<Parser<'a, &'a [Token], (Statement, Token)>>
       ), 
       |&: (stmt, _): (Statement, Token)| stmt
     )
@@ -195,7 +205,7 @@ pub fn statement<'a>() -> Box<Parser<'a, &'a [Token], Vec<Statement>> + 'a> {
 }
 
 
-fn variable<'a>() -> LParser<'a> {
+fn variable<'a>() -> LParser<'a, Expr> {
   box MatchParser{
     matcher: box |&: input: &Token| match input {
       &Ident(ref str) => Ok(Variable(str.clone())),
@@ -204,26 +214,28 @@ fn variable<'a>() -> LParser<'a> {
   }
 }
 
-fn expr<'a>() -> LParser<'a> {
+type EParser<'a> = LParser<'a, Expr>;
 
-  fn match_num<'a>() -> Box<Parser<'a, &'a[Token], Expr> + 'a> {
+fn expr<'a>() -> EParser<'a> {
+
+  fn match_num<'a>() -> EParser<'a> {
     box MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match input {
       &Number(num) => Ok(Num(num)),
       other => Err(format!("wrong type, expected number, got {}", other))
     }}
   }
 
-  fn term<'a>() -> LParser<'a> {
+  fn term<'a>() -> EParser<'a> {
     box OrParser{
       a: box |&:| paren_expr(),
       b: box |&:| box OrParser {
         a: box |&:| variable(),
         b: box |&:| match_num(),
-      } as LParser<'a>
+      } as EParser<'a>
     }
   }
 
-  fn mult<'a>() -> LParser<'a> {
+  fn mult<'a>() -> EParser<'a> {
     box MapParser{
       parser: box RepSepParser{
         rep: term(),
@@ -234,14 +246,14 @@ fn expr<'a>() -> LParser<'a> {
     }
   }
 
-  fn simple_expr<'a>() -> LParser<'a> {
+  fn simple_expr<'a>() -> EParser<'a> {
     box OrParser{
       b: box |&:| term(), 
       a: box |&:| mult() 
     }
   }
 
-  fn plus<'a>() -> LParser<'a> {
+  fn plus<'a>() -> EParser<'a> {
     box MapParser{
       parser: box RepSepParser{
         rep: simple_expr(),
@@ -252,7 +264,7 @@ fn expr<'a>() -> LParser<'a> {
     }
   }
 
-  fn paren_expr<'a>() -> LParser<'a> {
+  fn paren_expr<'a>() -> EParser<'a> {
     box MapParser {
       parser: box DualParser {
         first: box DualParser {
