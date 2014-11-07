@@ -2,7 +2,6 @@
 use parsers::*;
 use regex::{Captures, Regex};
 
-/*
 pub enum AddOp {
   Add,
   Subtract,
@@ -12,21 +11,16 @@ pub enum MultOp {
   Multiply,
   Divide,
 }
-*/
 
-//type AddTerm = (AddOp, Expr);
-//type MultTerm = (MultOp, Expr);
+type AddTerm = (AddOp, Expr);
+type MultTerm = (MultOp, Expr);
 
 #[deriving(Show)]
 pub enum Expr {
   Variable(String),  
   Num(int),
-  Plus(Vec<Expr>),
-  //Minus(Vec<Expr>),
-  Mult(Vec<Expr>),
-  //Divide(Vec<Expr>),
-  //AddSub(Vec<AddTerm>), //a + b - c + d becomes [(+ a) (+ b) (- c) (+ d)]
-  //MultDiv(Vec<MultTerm>), 
+  AddSub(Vec<AddTerm>), //a + b - c + d becomes [(+ a) (+ b) (- c) (+ d)]
+  MultDiv(Vec<MultTerm>), 
 }
 
 pub enum Statement {
