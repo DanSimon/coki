@@ -9,9 +9,8 @@ extern crate regex;
 use std::collections::HashMap;
 use parsers::*;
 use grammar::*;
-use regex::*;
 use std::os;
-use std::io::{File, Command};
+use std::io::File;
 
 
 pub mod parsers;
@@ -29,7 +28,7 @@ fn main() {
     Ok(raw) => {
       let lexer = token();
       match lexer.parse(raw.as_slice()) {
-        Ok((mut tokens, rest)) => {
+        Ok((tokens, rest)) => {
           if rest != "" {
             println!("Parser error at: {}", rest)
           } else {

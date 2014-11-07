@@ -1,4 +1,3 @@
-#![feature(macro_rules)]
 
 use parsers::*;
 use regex::{Captures, Regex};
@@ -66,35 +65,21 @@ pub macro_rules! or {
       b: box |&:| or!($b, $($c),* : $typ),
     } as $typ
   };
-  ($a: expr, $b: expr ) => {
-    box OrParser{
-      a: box |&:| $a,
-      b: box |&:| $b,
-    }
-  };
-  ($a: expr, $b: expr $(, $c: expr)*) => {
-    box OrParser{
-      a: box |&:| $a,
-      b: box |&:| or!($b, $($c),*),
-    }
-  };
 }
-
 pub macro_rules! seq {
-  ($a: expr, $b: expr ) => {
+  ($a: expr, $b: expr : $typ: ty) => {
     box DualParser{
-      a: $a,
-      b: $b,
-    }
+      first: $a,
+      second: $b,
+    } as $typ
+ };
+  ($a: expr, $b: expr $(, $c: expr)* : $typ: ty) => {
+    box DualParser{
+      first: $a,
+      second: seq!($b, $($c),* : $typ),
+    } as $typ
   };
-  ($a: expr, $b: expr $(, $c: expr)*) => {
-    box DualParser{
-      a: $a,
-      b: seq!($b, $($c),*),
-    }
-  }
 }
-  
 
 pub macro_rules! map {
   ($a: expr, $b: expr) => {
@@ -120,6 +105,14 @@ pub macro_rules! repsep {
       rep: $rep,
       sep: $sep,
       min_reps: $min,
+    }
+  }
+}
+
+pub macro_rules! rep {
+  ($rep: expr) => {
+    box RepParser{
+      parser: $rep,
     }
   }
 }
@@ -177,7 +170,7 @@ fn assign<'a>() -> Box<Parser<'a, &'a [Token], Statement> + 'a> {
       },
       second: expr()
     },
-    mapper: box |&: ((var, eq), expr): ((Expr, Token), Expr)| -> Statement match var{
+    mapper: box |&: ((var, _), expr): ((Expr, Token), Expr)| -> Statement match var{
       Variable(name) => Assign(name, expr),
       _ => panic!("FUCK")
     }
@@ -190,20 +183,21 @@ fn output<'a>() -> Box<Parser<'a, &'a [Token], Statement> + 'a> {
       first: literal(OutputCmd),
       second: expr(),
     },
-    mapper: box |&: (out, var): (Token, Expr)| Output(var)
+    mapper: box |&: (_, var): (Token, Expr)| Output(var)
   }
 }
 
 pub fn statement<'a>() -> Box<Parser<'a, &'a [Token], Vec<Statement>> + 'a> {
-  box RepParser{
-    parser: box MapParser{
-      parser: box DualParser {
-        first: or!(output(), assign()),
-        second: literal(NewLine),
-      },
-      mapper: box |&: (stmt, nl): (Statement, Token)| stmt
-    }
-  }
+  rep!(
+    map!(
+      seq!(
+        or!(output(), assign(): Box<Parser<'a, &'a [Token], Statement>>), 
+        literal(NewLine)
+        : Box<Parser<'a, &'a [Token], (Statement, Token)>>
+      ), 
+      |&: (stmt, _): (Statement, Token)| stmt
+    )
+  )
 }
 
 
@@ -273,7 +267,7 @@ fn expr<'a>() -> LParser<'a> {
         },
         second: literal(CloseParen),
       },
-      mapper: box |&: ((o, e), c): ((Token, Expr), Token)| e
+      mapper: box |&: ((_, e), _): ((Token, Expr), Token)| e
     }
   }
 

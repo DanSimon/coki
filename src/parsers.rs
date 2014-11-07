@@ -14,14 +14,6 @@ pub trait Parser<'a, I, O> {
 
   fn parse(&self, data: I) -> ParseResult<'a, I, O>;
 
-  /*
-  fn or(self, p: Box<Parser<'a, I, O> + 'a>) -> Box<Parser<'a, I, O>> {
-    box OrParser{
-      a: box self,
-      b: p,
-    }
-  }
-  */
 }
 
 
@@ -31,7 +23,7 @@ pub struct LiteralParser<'a, T:'a + Eq> {
 
 impl<'a, T: 'a + Eq + Clone> Parser<'a,  &'a [T], T> for LiteralParser<'a, T> {
   fn parse(&self, data: &'a[T]) -> ParseResult<'a, &'a[T], T> {
-    if (data.len() < 1) {
+    if data.len() < 1 {
       return Err(format!("ran out of data"))
     }
     if data[0] == self.literal {
@@ -48,7 +40,7 @@ pub struct RegexLiteralParser<'a> {
 
 impl<'a> Parser<'a, &'a str, ()> for RegexLiteralParser<'a> {
   fn parse(&self, data: &'a str) -> ParseResult<'a, &'a str, ()> {
-    self.regex.find(data).map(|(s, e)| ((), data.slice_from(e))).ok_or(format!("regex literal match fail"))
+    self.regex.find(data).map(|(_, e)| ((), data.slice_from(e))).ok_or(format!("regex literal match fail"))
   }
 }
 
@@ -59,7 +51,7 @@ impl<'a> Parser<'a, &'a str, Captures<'a>> for RegexCapturesParser<'a> {
   fn parse(&self, data: &'a str) -> ParseResult<'a, &'a str, Captures<'a>> {
     match self.regex.captures(data) {
       Some(caps) => match caps.pos(0) {
-        Some((s, e)) => Ok((caps, data.slice_from(e))),
+        Some((_, e)) => Ok((caps, data.slice_from(e))),
         None => Err(format!("No Match"))
       },
       None => Err(format!("No Match"))
@@ -76,7 +68,7 @@ pub struct MatchParser<'a, I, O> {
 }
 impl<'a, I: Clone, O> Parser<'a, &'a [I], O> for MatchParser<'a, I, O> {
   fn parse(&self, data: &'a[I]) -> ParseResult<'a, &'a[I], O> {
-    if (data.len() < 1) {
+    if data.len() < 1 {
       Err(format!("Unexpected End!"))
     } else {
       self.matcher.call((&data[0],)).map(|res| (res, data.slice_from(1)))
@@ -94,19 +86,17 @@ impl<'a, I: Clone, O> Parser<'a, I, Vec<O>> for RepParser<'a, I, O> {
   fn parse(&self, data: I) -> ParseResult<'a, I, Vec<O>> {
     let mut remain = data;
     let mut v: Vec<O> = Vec::new();
-    let mut done = false;
-    while done == false {
+    loop {
       match self.parser.parse(remain.clone()) {
         Ok((result, rest)) => {
           v.push(result);
           remain = rest;
         }
-        Err(err) => {
+        Err(_) => {
           return Ok((v, remain));
         }
       }
     }
-    Ok((v, remain))
   }
 }
 
@@ -129,7 +119,7 @@ impl<'a, I: Clone, O, U> Parser<'a, I, Vec<O>> for RepSepParser<'a, I, O, U> {
               remain = rest2
             }
             Err(_) => {
-              if (v.len() < self.min_reps) {
+              if v.len() < self.min_reps {
                 return Err(format!("Not enough reps: required {}, got {}", self.min_reps, v.len()))
               } else {
                 return Ok((v, rest)) 
@@ -179,7 +169,7 @@ impl<'a, I: Clone, O> Parser<'a, I, O> for OrParser<'a, I, O> {
   fn parse(&self, data: I) -> ParseResult<'a, I, O> {
     match self.a.call(()).parse(data.clone()) {
       Ok((a, d2)) => Ok((a, d2)),
-      Err(err) => match self.b.call(()).parse(data.clone()) {
+      Err(_) => match self.b.call(()).parse(data.clone()) {
         Ok((b, remain)) => Ok((b, remain)),
         Err(err) => Err(err)
       }
