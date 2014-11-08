@@ -52,7 +52,23 @@ pub struct Block(pub Vec<Statement>);
 pub enum Statement {
   Assign(String, Expr),
   Output(Expr),
+  If(Expr, Comparator, Expr, Block, Block),
 }
+
+#[deriving(Show)]
+#[deriving(Clone)]
+#[deriving(Eq)]
+#[deriving(PartialEq)]
+pub enum Comparator {
+  CEq,  // ==
+  CGt,  // >
+  CLt,  // <
+  CNeq, // !=
+  CGeq, // >=
+  CLeq, // <=
+}
+
+
 
 #[deriving(Show)]
 #[deriving(Eq)]
@@ -70,6 +86,11 @@ pub enum Token {
   NewLine,
   OpenParen,
   CloseParen,
+  OpenBrace,
+  CloseBrace,
+  IfKeyword,
+  ElseKeyword,
+  Cmp(Comparator),
 }
 
 
@@ -164,15 +185,25 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
   
 
   rep!(or!(
-    literal!("out", OutputCmd),
-    literal!(r"\r?\n\s*", NewLine),
-    literal!(r"\(", OpenParen),
-    literal!(r"\)", CloseParen),
-    literal!(r"\+", PlusSign),
-    literal!("-", MinusSign),
-    literal!("=", Equals),
-    literal!(r"\*", MultSign),
-    literal!("/", DivideSign),
+    literal!("out",         OutputCmd),
+    literal!("if",          IfKeyword),
+    literal!("else",        ElseKeyword),
+    literal!(r"\r?\n\s*",   NewLine),
+    literal!(r"\(\s*",      OpenParen),
+    literal!(r"\)",         CloseParen),
+    literal!(r"\{\s*",      OpenBrace),
+    literal!(r"\}",         CloseBrace),
+    literal!("==",          Cmp(CEq)),
+    literal!("!=",          Cmp(CNeq)),
+    literal!(">=",          Cmp(CGeq)),
+    literal!("<=",          Cmp(CLeq)),
+    literal!(">",           Cmp(CGt)),
+    literal!("<",           Cmp(CLt)),
+    literal!(r"\+",         PlusSign),
+    literal!("-",           MinusSign),
+    literal!("=",           Equals),
+    literal!(r"\*",         MultSign),
+    literal!("/",           DivideSign),
     number(),
     ident()
   ))
@@ -200,12 +231,21 @@ fn output<'a>() -> LParser<'a, Statement> {
   )
 }
 
+fn if_stmt<'a>() -> LParser<'a, Statement> {
+  //todo: optional else
+  map!(
+    seq!(literal(IfKeyword), expr(), comparator(), expr(), braced_block(), literal(ElseKeyword), braced_block()),
+    |&: (_, (lhs, (comp, (rhs, (then_block, (_ , else_block))))))| If(lhs, comp, rhs, then_block, else_block)
+  )
+}
+  
+
 pub fn block<'a>() -> LParser<'a, Block> {
   map!(
     rep!(
       map!(
         seq!(
-          or!(output(), assign()),
+          or!(output(), if_stmt(), assign()),
           literal(NewLine)
         ), 
         |&: (stmt, _)| stmt
@@ -215,6 +255,24 @@ pub fn block<'a>() -> LParser<'a, Block> {
   )
 
 }
+
+pub fn braced_block<'a>() -> LParser<'a, Block> {
+  map!(
+    seq!(literal(OpenBrace), block(), literal(CloseBrace)),
+    |&: (_, (block, _))| block
+  )
+}
+
+pub fn comparator<'a>() -> LParser<'a, Comparator> {
+  box MatchParser{
+    matcher: box |&: input: &Token| match *input {
+      Cmp(c) => Ok(c),
+      ref other => Err(format!("Expected comparator, got {}", other))
+    }
+  }
+}
+
+  
 
 
 fn variable<'a>() -> LParser<'a, Expr> {

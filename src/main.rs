@@ -57,27 +57,45 @@ fn main() {
 
 
 fn run(prog: &Vec<Statement>) {
-  let mut env: HashMap<String, int> = HashMap::new();
-  for s in prog.iter() {
-    match *s {
-      Assign(ref var, ref expr) => {
-        match eval(expr, &env) {
-          Ok(res)   => {env.insert(var.clone(), res);}
-          Err(err)  => {
-            println!("ERROR: {}", err);
+  fn run_internal(prog: &Vec<Statement>, env: &mut HashMap<String, int>) {
+    for s in prog.iter() {
+      match *s {
+        Assign(ref var, ref expr) => {
+          match eval(expr, env) {
+            Ok(res)   => {env.insert(var.clone(), res);}
+            Err(err)  => {
+              println!("ERROR: {}", err);
+              return;
+            }
+          }
+        },
+        Output(ref expr) => match eval(expr, env) {
+          Ok(val) => {println!("{}", val)}
+          Err(err) => {
+            println!("ERROR: {}", err)
             return;
           }
-        }
-      }
-      Output(ref expr) => match eval(expr, &env) {
-        Ok(val) => {println!("{}", val)}
-        Err(err) => {
-          println!("ERROR: {}", err)
-          return;
+        },
+        If(ref lhs, ref cmp, ref rhs, ref then_block, ref else_block) => {
+          let l = eval(lhs, env);
+          let r = eval(rhs, env);
+          let is_true = match *cmp {
+            CEq   => l == r,
+            CNeq  => l != r,
+            CLt   => l < r,
+            CGt   => l > r,
+            CLeq  => l <= r,
+            CGeq  => l >= r,
+          };
+          let &Block(ref p) = if (is_true) { then_block } else { else_block };
+          //fixme: need to respect block scopes
+          run_internal(p, env);
         }
       }
     }
   }
+  let mut env: HashMap<String, int> = HashMap::new();
+  run_internal(prog, &mut env);
 }
 
 fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
