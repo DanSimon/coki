@@ -187,7 +187,7 @@ impl <'a, I, A, B> Parser<'a, I, (A,B)> for DualParser<'a, I, A, B> {
 
 /*
  * A parser that will attempt to parse using parser `a`, and then `b` if
- * the first fails.  The sub parsers are lazy so that we can support recursive
+ * the first fails.  The contained parsers are lazy so that we can support recursive
  * grammars.
  *
  * In general, the "greedier" parser should be `a`.
@@ -237,6 +237,21 @@ pub struct MapParser<'a, I, O, U> {
 impl<'a, I, O, U> Parser<'a, I, U> for MapParser<'a, I, O, U> {
   fn parse(&self, data: I) -> ParseResult<'a, I, U> {
     self.parser.parse(data).map(|(output, input)| ((self.mapper.call((output,)), input)))
+  }
+}
+
+/*
+ * A Parser that will attempt to use a parser, returning an option of the contained parser's result
+ */
+pub struct OptionParser<'a, I, O> {
+  pub parser: Box<Parser<'a, I, O> + 'a>
+}
+impl<'a, I: Clone, O> Parser<'a, I, Option<O>> for OptionParser<'a, I, O> {
+  fn parse(&self, data: I) -> ParseResult<'a, I, Option<O>> {
+    match self.parser.parse(data.clone()) {
+      Ok((result, rest))  => Ok((Some(result), rest)),
+      Err(_)              => Ok((None, data)),
+    }
   }
 }
 
