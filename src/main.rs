@@ -32,13 +32,13 @@ fn main() {
           if rest != "" {
             println!("Parser error at: {}", rest)
           } else {
-            let parser = statement();
+            let parser = block();
             match parser.parse(tokens.as_slice()) {
-              Ok((exp, rest)) => {
+              Ok((Block(stmts), rest)) => {
                 if rest.len() > 0 {
                   println!("Error: unexpected token {}", rest[0]);
                 } else {
-                  run(&exp);
+                  run(&stmts);
                 }
               }
               Err(err) => {println!("Parse Error: {}", err);}

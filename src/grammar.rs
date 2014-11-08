@@ -39,6 +39,13 @@ pub enum Expr {
   MultDiv(Vec<MultTerm>), 
 }
 
+
+//for now this is it's own type and not a statement
+#[deriving(Show)]
+#[deriving(Clone)]
+#[deriving(PartialEq)]
+pub struct Block(pub Vec<Statement>);
+
 #[deriving(Show)]
 #[deriving(Clone)]
 #[deriving(PartialEq)]
@@ -86,6 +93,7 @@ pub macro_rules! or {
     }) 
   };
 }
+
 pub macro_rules! seq {
   ($a: expr, $b: expr ) => {
     box DualParser{
@@ -192,16 +200,20 @@ fn output<'a>() -> LParser<'a, Statement> {
   )
 }
 
-pub fn statement<'a>() -> LParser<'a, Vec<Statement>> {
-  rep!(
-    map!(
-      seq!(
-        or!(output(), assign()),
-        literal(NewLine)
-      ), 
-      |&: (stmt, _)| stmt
-    )
+pub fn block<'a>() -> LParser<'a, Block> {
+  map!(
+    rep!(
+      map!(
+        seq!(
+          or!(output(), assign()),
+          literal(NewLine)
+        ), 
+        |&: (stmt, _)| stmt
+      )
+    ),
+    |&: stmts| Block(stmts)
   )
+
 }
 
 
