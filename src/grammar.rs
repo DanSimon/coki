@@ -1,21 +1,37 @@
 
 use parsers::*;
 use regex::{Captures, Regex};
+use std::fmt::Show;
 
+#[deriving(Show)]
+#[deriving(Clone)]
+#[deriving(PartialEq)]
 pub enum AddOp {
   Add,
   Subtract,
 }
 
+#[deriving(Show)]
+#[deriving(Clone)]
+#[deriving(PartialEq)]
 pub enum MultOp {
   Multiply,
   Divide,
 }
 
-type AddTerm = (AddOp, Expr);
-type MultTerm = (MultOp, Expr);
+#[deriving(Clone)]
+#[deriving(Show)]
+#[deriving(PartialEq)]
+pub struct AddTerm(pub AddOp, pub Expr);
+
+#[deriving(Clone)]
+#[deriving(Show)]
+#[deriving(PartialEq)]
+pub struct MultTerm(pub MultOp, pub Expr);
 
 #[deriving(Show)]
+#[deriving(Clone)]
+#[deriving(PartialEq)]
 pub enum Expr {
   Variable(String),  
   Num(int),
@@ -23,6 +39,9 @@ pub enum Expr {
   MultDiv(Vec<MultTerm>), 
 }
 
+#[deriving(Show)]
+#[deriving(Clone)]
+#[deriving(PartialEq)]
 pub enum Statement {
   Assign(String, Expr),
   Output(Expr),
@@ -146,19 +165,19 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
   )}
   
 
-  box RepParser{
-    parser: or!(
-      literal!(r"^[ \t]*out", OutputCmd),
-      literal!(r"^[ \t]*\r?\n[ \t]*", NewLine),
-      literal!(r"^[ \t]*\(", OpenParen),
-      literal!(r"^[ \t]*\)", CloseParen),
-      number(),
-      literal!(r"^[ \t]*\+", PlusSign),
-      literal!(r"^[ \t]*=", Equals),
-      ident(), 
-      literal!(r"^[ \t]*\*", MultSign)
-    )
-  }
+  rep!(or!(
+    literal!(r"^[ \t]*out", OutputCmd),
+    literal!(r"^[ \t]*\r?\n[ \t]*", NewLine),
+    literal!(r"^[ \t]*\(", OpenParen),
+    literal!(r"^[ \t]*\)", CloseParen),
+    number(),
+    literal!(r"^[ \t]*\+", PlusSign),
+    literal!(r"^[ \t]*-", MinusSign),
+    literal!(r"^[ \t]*=", Equals),
+    ident(), 
+    literal!(r"^[ \t]*\*", MultSign),
+    literal!(r"^[ \t]*/", DivideSign)
+  ))
 
 }
     
@@ -183,13 +202,10 @@ fn assign<'a>() -> LParser<'a, Statement> {
 }
 
 fn output<'a>() -> LParser<'a, Statement> {
-  box MapParser {
-    parser : box DualParser {
-      first: literal(OutputCmd),
-      second: expr(),
-    },
-    mapper: box |&: (_, var): (Token, Expr)| Output(var)
-  }
+  map!(
+    seq!(literal(OutputCmd), expr()),
+    |&: (_, var): (Token, Expr)| Output(var)
+  )
 }
 
 pub fn statement<'a>() -> LParser<'a, Vec<Statement>> {
@@ -218,7 +234,7 @@ type EParser<'a> = LParser<'a, Expr>;
 
 fn expr<'a>() -> EParser<'a> {
 
-  fn match_num<'a>() -> EParser<'a> {
+  fn number<'a>() -> EParser<'a> {
     box MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match input {
       &Number(num) => Ok(Num(num)),
       other => Err(format!("wrong type, expected number, got {}", other))
@@ -226,42 +242,55 @@ fn expr<'a>() -> EParser<'a> {
   }
 
   fn term<'a>() -> EParser<'a> {
-    box OrParser{
-      a: box |&:| paren_expr(),
-      b: box |&:| box OrParser {
-        a: box |&:| variable(),
-        b: box |&:| match_num(),
-      } as EParser<'a>
-    }
+    or!(paren_expr(), variable(), number())
   }
 
   fn mult<'a>() -> EParser<'a> {
-    box MapParser{
-      parser: box RepSepParser{
-        rep: term(),
-        sep: literal(MultSign),
-        min_reps : 2
-      },
-      mapper: box |&: ops: Vec<Expr>| Mult(ops)
-    }
+    map!(
+      seq!(
+        term(),
+        rep!(seq!(or!(literal(MultSign), literal(DivideSign)), term()))
+      ),
+      |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
+        let mut f = Vec::new();
+        f.push(MultTerm(Multiply, first));
+        for &(ref sign, ref value) in rest.iter() {
+          let s = match *sign {
+            MultSign => Multiply,
+            DivideSign => Divide,
+            _ => panic!("not allowed")
+          };
+          f.push(MultTerm(s, value.clone())); //maybe box the value instead
+        }
+        MultDiv(f)
+      }
+    )
   }
 
   fn simple_expr<'a>() -> EParser<'a> {
-    box OrParser{
-      b: box |&:| term(), 
-      a: box |&:| mult() 
-    }
+    or!(mult(), term()) 
   }
 
   fn plus<'a>() -> EParser<'a> {
-    box MapParser{
-      parser: box RepSepParser{
-        rep: simple_expr(),
-        sep: literal(PlusSign),
-        min_reps : 2
-      },
-      mapper: box |&: ops: Vec<Expr>| Plus(ops)
-    }
+    map!(
+      seq!(
+        simple_expr(),
+        rep!(seq!(or!(literal(PlusSign), literal(MinusSign)), simple_expr()))
+      ),
+      |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
+        let mut f = Vec::new();
+        f.push(AddTerm(Add, first));
+        for &(ref sign, ref value) in rest.iter() {
+          let s = match *sign {
+            PlusSign => Add,
+            MinusSign => Subtract,
+            _ => panic!("not allowed")
+          };
+          f.push(AddTerm(s, value.clone()));
+        }
+        AddSub(f)
+      }
+    )
   }
 
   fn paren_expr<'a>() -> EParser<'a> {
@@ -277,10 +306,58 @@ fn expr<'a>() -> EParser<'a> {
     }
   }
 
-  let expr = box OrParser{
-      a: box |&:| plus(),
-      b: box |&:| simple_expr(),
-  };
-
-  expr
+  plus()
 }
+
+macro_rules! assert_pat {
+  ($actual: expr, $expected: pat) => {
+    match $actual{
+      $expected => {}
+      other => panic!(format!("Assert match failed: got '{}'", other))
+    }
+  }
+}
+
+fn test_parser<'a, I, O: PartialEq + Show>(input: I, parser: &Parser<'a, I, O>, expected: O) {
+  match parser.parse(input) {
+    Ok((output, rest)) => {
+      assert_eq!(output, expected);
+    },
+    Err(err) => panic!(err)
+  }
+}
+
+#[test]
+fn test_term() {
+  let parser = expr();
+  let input = [Number(5)];
+  let expected = AddSub(vec![AddTerm(Add, Num(5))]);
+  test_parser(input.as_slice(), &*parser, expected);
+}
+
+#[test]
+fn test_plus_sequence() {
+  let parser = expr();
+  let input = [Number(5), PlusSign, Number(3)];
+  let expected = AddSub(vec![AddTerm(Add, Num(5)), AddTerm(Add, Num(3))]);
+  test_parser(input.as_slice(), &*parser, expected);
+}
+
+#[test]
+fn test_simple_assign() {
+  let parser = assign();
+  let input = [Ident(from_str("x").unwrap()), Equals, Number(7)];
+  let expected = Assign(from_str("x").unwrap(), AddSub(vec![AddTerm(Add, Num(7))]));
+  test_parser(input.as_slice(), &*parser, expected);
+}
+
+#[test]
+fn test_simple_output() {
+  let parser = output();
+  let input = [OutputCmd, Number(4)];
+  let expected = Output(AddSub(vec![AddTerm(Add, Num(4))]));
+  test_parser(input.as_slice(), &*parser, expected);
+
+}
+
+

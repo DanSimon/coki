@@ -87,13 +87,14 @@ fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
       None => Err(format!("Undefined var {}", var)),
     },
     Num(val) => Ok(val),
-    Plus(ref ops) => {
+    AddSub(ref ops) => {
       let mut sum = 0i;
-      for op in ops.iter() {
+      for &AddTerm(ref sign, ref op) in ops.iter() {
         match eval(op, env) {
-          Ok(value) => {
-            sum += value;
-          }
+          Ok(value) => match *sign {
+            Add => {sum += value;}
+            Subtract => {sum -= value;}
+          },
           Err(err) => {
             return Err(err);
           }
@@ -101,13 +102,14 @@ fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
       }
       Ok(sum)
     },
-    Mult(ref ops) => {
+    MultDiv(ref ops) => {
       let mut total = 1i;
-      for op in ops.iter() {
+      for &MultTerm(ref sign,ref op) in ops.iter() {
         match eval(op, env) {
-          Ok(value) => {
-            total *= value;
-          }
+          Ok(value) => match *sign{
+            Multiply => {total *= value;}
+            Divide  => {total /= value;}
+          },
           Err(err) => {
             return Err(err);
           }
