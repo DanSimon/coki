@@ -2,22 +2,32 @@
 use std::ops::Fn;
 use regex::{Captures, Regex};
 
-
-pub fn literal<'a, T:'a + Eq + Clone>(literal: T) -> Box<Parser<'a, &'a[T], T> + 'a> {
-  box LiteralParser{literal: literal}
-}
-
-pub type ParseResult<'a, I:'a, O> = Result<(O, I), String>;
-
-
+/*
+ * A Parser is designed to take an input type and turn part of it into an
+ * output type.  Probably in every real-life scenario, the input type is a
+ * slice of some type.  Thus a parser returns an output type along with another
+ * input type, which for slices would be the rest of the data.
+ */
 pub trait Parser<'a, I, O> {
 
   fn parse(&self, data: I) -> ParseResult<'a, I, O>;
 
 }
 
+pub type ParseResult<'a, I:'a, O> = Result<(O, I), String>;
 
-pub struct LiteralParser<'a, T:'a + Eq> {
+pub fn literal<'a, T:'a + Eq + Clone>(literal: T) -> Box<Parser<'a, &'a[T], T> + 'a> {
+  box LiteralParser{literal: literal}
+}
+
+
+
+
+/*
+ * a parser that consumes one item in a slice and only returns ok if it equals
+ * the given literal
+ */
+pub struct LiteralParser<'a, T:'a + Eq + Clone> {
   pub literal: T,
 }
 
@@ -34,6 +44,9 @@ impl<'a, T: 'a + Eq + Clone> Parser<'a,  &'a [T], T> for LiteralParser<'a, T> {
   }
 }
 
+/*
+ * A string Parser that attempts to consume the given regex
+ */
 pub struct RegexLiteralParser<'a> {
   pub regex: Regex,
 }
@@ -63,6 +76,9 @@ impl<'a> Parser<'a, &'a str, Captures<'a>> for RegexCapturesParser<'a> {
 
 
 
+/*
+ * A slice Parser that matches against the first item in the slice
+ */
 pub struct MatchParser<'a, I, O> {
   pub matcher: Box< Fn<(&'a I,), Result<O, String>> +'a>
 }
@@ -78,6 +94,10 @@ impl<'a, I: Clone, O> Parser<'a, &'a [I], O> for MatchParser<'a, I, O> {
 
     
 
+/*
+ * A Parser that will keep repeating the given parser until it returns an
+ * error.  The accumulated results are returned.
+ */
 pub struct RepParser<'a, I, O>{
   pub parser: Box<Parser<'a, I, O> + 'a>
 }
@@ -100,7 +120,11 @@ impl<'a, I: Clone, O> Parser<'a, I, Vec<O>> for RepParser<'a, I, O> {
   }
 }
 
-//sep should return a Failure when it's time to stop repeating, the ok value is never used
+/*
+ * A Parser that will repeatedly parse `rep` and `sep` in sequence until `sep`
+ * returns an error.  The accumulated `rep` results are returned.  If `rep`
+ * returns an error at any time, the error is escelated.
+ */
 pub struct RepSepParser<'a, I, O, U> {
   pub rep: Box<Parser<'a, I, O> + 'a>,
   pub sep: Box<Parser<'a, I, U> + 'a>,
@@ -138,6 +162,11 @@ impl<'a, I: Clone, O, U> Parser<'a, I, Vec<O>> for RepSepParser<'a, I, O, U> {
   
 
 
+/*
+ * A Parser that will combine two parsers into a tuple of results.  If either
+ * parser returns an error, the error is escelated (ie partial successes are
+ * not returned)
+ */
 pub struct DualParser<'a, I, A, B> {
   pub first: Box<Parser<'a, I, A> + 'a>,
   pub second: Box<Parser<'a, I, B> + 'a>
@@ -156,15 +185,18 @@ impl <'a, I, A, B> Parser<'a, I, (A,B)> for DualParser<'a, I, A, B> {
   }
 }
 
-//we need lazy evaluation to be able to support recursive grammars!
+/*
+ * A parser that will attempt to parse using parser `a`, and then `b` if
+ * the first fails.  The sub parsers are lazy so that we can support recursive
+ * grammars.
+ *
+ * In general, the "greedier" parser should be `a`.
+ */
 pub struct OrParser<'a, I, O> {
   pub a: Box<Fn<(), Box<Parser<'a, I, O> + 'a> + 'a> + 'a>,
   pub b: Box<Fn<(), Box<Parser<'a, I, O> + 'a> + 'a> + 'a>
 }
 
-/*
- * Notice that I needs to be cloneable because we have to be able to hand it off to each parser
- */
 impl<'a, I: Clone, O> Parser<'a, I, O> for OrParser<'a, I, O> {
   fn parse(&self, data: I) -> ParseResult<'a, I, O> {
     match self.a.call(()).parse(data.clone()) {
@@ -176,6 +208,8 @@ impl<'a, I: Clone, O> Parser<'a, I, O> for OrParser<'a, I, O> {
     }
   }
 }
+
+//this parser doesn't work yet, seems to be some weirdness when trying to put unboxed closures in a vector
 
 pub struct OneOfParser<'a, I, O> {
   parsers: Vec<Box<Fn<(), Box<Parser<'a, I, O> + 'a> + 'a> + 'a> + 'a>
@@ -193,6 +227,9 @@ impl<'a, I: Clone, O> Parser<'a, I, O> for OneOfParser<'a, I, O> {
   }
 }
 
+/*
+ * A Parser that can map the successful result of a parser to another type
+ */
 pub struct MapParser<'a, I, O, U> {
   pub parser: Box<Parser<'a, I, O> + 'a>,
   pub mapper: Box<Fn<(O,), U> +'a>, //this has to be a &Fn and not a regular lambda since it must be immutable
@@ -204,94 +241,3 @@ impl<'a, I, O, U> Parser<'a, I, U> for MapParser<'a, I, O, U> {
 }
 
       
-      
-
-
-  
-/*
-  
-
-#[test]
-fn test_char() {
-  let ch = CharParser::new('v');
-  let data = "vbx";
-  match ch.parse(data) {
-    Ok((c, rest)) => {
-      assert!(c == 'v');
-      assert!(rest.len() == 2);
-      assert!(rest.char_at(0) == 'b');
-    }
-    Err(err) => {fail!(format!("unepected error: {}", err));}
-  }
-}
-
-/*
-#[test]
-fn test_regex() {
-  let reg = regex!("ab[cd]");
-  let parser_a = RegexParser{regex: reg};
-  let data = "abdabc";
-  assert!(parser_a.parse(data) == Ok(("abd", "abc")));
-}
-*/
-
-#[test]
-fn test_rep() {
-  let ch = CharParser::new('v');
-  let rep = RepParser{reps: 3, parser: &ch};
-  let data = "vvvx";
-  match rep.parse(data) {
-    Ok((vec, rest)) => {
-      assert!(vec.len() == 3)
-      for c in vec.iter() {
-        assert!(*c == 'v');
-      }
-    }
-    Err(err) => {fail!(format!("unepected error: {}", err));}
-  }
-}
-
-#[test]
-fn test_and_then() {
-  let a = CharParser::new('a' );
-  let b = CharParser::new('b' );
-  let ab = a.and_then(&b);
-  let data = "abvx";
-  match ab.parse(data) {
-    Ok(((a, b), rem)) => {
-      assert!(a == 'a');
-      assert!(b == 'b');
-      assert!(rem.len() == 2);
-    }
-    Err(err) => {
-      fail!(err);
-    }
-  }
-}
-
-#[test]
-fn test_or() {
-  let a = CharParser::new('a' );
-  let b = CharParser::new('b' );
-  let ab = a.or(&b);
-  let data = "abvx";
-  match ab.parse(data) {
-    Ok((OrA('a'), rem)) => {
-      match ab.parse(rem) {
-        Ok((OrB('b'), rem)) => {
-          assert!(rem.len() == 2);
-        }
-        _ => {fail!("wrong b");}
-      }
-    }
-    _ => {
-      fail!("wrong a");
-    }
-  }
-}
-  
-
-
-
- */ 
-    

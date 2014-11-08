@@ -137,7 +137,7 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
   macro_rules! literal {
     ($reg: expr, $tok: expr) => {
       p(map!(
-        box RegexLiteralParser{regex : Regex::new($reg).unwrap()},
+        box RegexLiteralParser{regex : Regex::new((String::from_str(r"^[ \t]*") + $reg).as_slice()).unwrap()},
         |&: ()| $tok
       ))
     }
@@ -156,15 +156,15 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
   
 
   rep!(or!(
-    literal!(r"^[ \t]*out", OutputCmd),
-    literal!(r"^[ \t]*\r?\n\s*", NewLine),
-    literal!(r"^[ \t]*\(", OpenParen),
-    literal!(r"^[ \t]*\)", CloseParen),
-    literal!(r"^[ \t]*\+", PlusSign),
-    literal!(r"^[ \t]*-", MinusSign),
-    literal!(r"^[ \t]*=", Equals),
-    literal!(r"^[ \t]*\*", MultSign),
-    literal!(r"^[ \t]*/", DivideSign),
+    literal!("out", OutputCmd),
+    literal!(r"\r?\n\s*", NewLine),
+    literal!(r"\(", OpenParen),
+    literal!(r"\)", CloseParen),
+    literal!(r"\+", PlusSign),
+    literal!("-", MinusSign),
+    literal!("=", Equals),
+    literal!(r"\*", MultSign),
+    literal!("/", DivideSign),
     number(),
     ident()
   ))
@@ -236,7 +236,7 @@ fn expr<'a>() -> EParser<'a> {
         rep!(seq!(or!(literal(MultSign), literal(DivideSign)), term()))
       ),
       |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
-        if (rest.len() == 0) {
+        if rest.len() == 0 {
           first
         } else {
           let mut f = Vec::new();
@@ -266,7 +266,7 @@ fn expr<'a>() -> EParser<'a> {
         rep!(seq!(or!(literal(PlusSign), literal(MinusSign)), simple_expr()))
       ),
       |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
-        if (rest.len() == 0) {
+        if rest.len() == 0 {
           first
         } else {
           let mut f = Vec::new();
@@ -293,15 +293,6 @@ fn expr<'a>() -> EParser<'a> {
   }
 
   plus()
-}
-
-macro_rules! assert_pat {
-  ($actual: expr, $expected: pat) => {
-    match $actual{
-      $expected => {}
-      other => panic!(format!("Assert match failed: got '{}'", other))
-    }
-  }
 }
 
 fn test_parser<'a, I, O: PartialEq + Show>(input: I, parser: &Parser<'a, I, O>, expected: O) {
