@@ -167,16 +167,16 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
 
   rep!(or!(
     literal!(r"^[ \t]*out", OutputCmd),
-    literal!(r"^[ \t]*\r?\n[ \t]*", NewLine),
+    literal!(r"^[ \t]*\r?\n\s*", NewLine),
     literal!(r"^[ \t]*\(", OpenParen),
     literal!(r"^[ \t]*\)", CloseParen),
-    number(),
     literal!(r"^[ \t]*\+", PlusSign),
     literal!(r"^[ \t]*-", MinusSign),
     literal!(r"^[ \t]*=", Equals),
-    ident(), 
     literal!(r"^[ \t]*\*", MultSign),
-    literal!(r"^[ \t]*/", DivideSign)
+    literal!(r"^[ \t]*/", DivideSign),
+    number(),
+    ident()
   ))
 
 }
@@ -186,19 +186,13 @@ pub type LParser<'a, T> = Box<Parser<'a, &'a [Token], T> + 'a>;
 
 
 fn assign<'a>() -> LParser<'a, Statement> {
-  box MapParser {
-    parser: box DualParser {
-      first: box DualParser {
-        first: variable(),
-        second: literal(Equals),
-      },
-      second: expr()
-    },
-    mapper: box |&: ((var, _), expr): ((Expr, Token), Expr)| -> Statement match var{
+  map!( 
+    seq!(variable(), literal(Equals), expr()),
+    |&: (var,( _, expr))| match var{
       Variable(name) => Assign(name, expr),
-      _ => panic!("FUCK")
+      _ => unreachable!()
     }
-  }
+  )
 }
 
 fn output<'a>() -> LParser<'a, Statement> {
@@ -215,7 +209,7 @@ pub fn statement<'a>() -> LParser<'a, Vec<Statement>> {
         or!(output(), assign()),
         literal(NewLine)
       ), 
-      |&: (stmt, _): (Statement, Token)| stmt
+      |&: (stmt, _)| stmt
     )
   )
 }
@@ -294,16 +288,10 @@ fn expr<'a>() -> EParser<'a> {
   }
 
   fn paren_expr<'a>() -> EParser<'a> {
-    box MapParser {
-      parser: box DualParser {
-        first: box DualParser {
-          first: literal(OpenParen),
-          second: expr(),
-        },
-        second: literal(CloseParen),
-      },
-      mapper: box |&: ((_, e), _): ((Token, Expr), Token)| e
-    }
+    map!(
+      seq!(literal(OpenParen), expr(), literal(CloseParen)),
+      |&: (_, (expr, _))| expr
+    )
   }
 
   plus()
@@ -357,7 +345,6 @@ fn test_simple_output() {
   let input = [OutputCmd, Number(4)];
   let expected = Output(AddSub(vec![AddTerm(Add, Num(4))]));
   test_parser(input.as_slice(), &*parser, expected);
-
 }
 
 
