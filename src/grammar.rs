@@ -110,15 +110,6 @@ pub macro_rules! map {
   }
 }
 
-pub macro_rules! link {
-  ($a: expr, $b: expr) => {
-    box DualParser{
-      first: $a,
-      second: $b,
-    }
-  }
-}
-
 pub macro_rules! repsep {
   ($rep: expr, $sep: expr, $min: expr) => {
     box RepSepParser{
@@ -142,7 +133,6 @@ type Lexer<'a> = Box<Parser<'a, &'a str, Token> + 'a>;
 
 
 pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
-
 
   macro_rules! literal {
     ($reg: expr, $tok: expr) => {
@@ -229,9 +219,9 @@ type EParser<'a> = LParser<'a, Expr>;
 fn expr<'a>() -> EParser<'a> {
 
   fn number<'a>() -> EParser<'a> {
-    box MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match input {
-      &Number(num) => Ok(Num(num)),
-      other => Err(format!("wrong type, expected number, got {}", other))
+    box MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match *input {
+      Number(num) => Ok(Num(num)),
+      ref other => Err(format!("wrong type, expected number, got {}", other))
     }}
   }
 
@@ -246,17 +236,21 @@ fn expr<'a>() -> EParser<'a> {
         rep!(seq!(or!(literal(MultSign), literal(DivideSign)), term()))
       ),
       |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
-        let mut f = Vec::new();
-        f.push(MultTerm(Multiply, first));
-        for &(ref sign, ref value) in rest.iter() {
-          let s = match *sign {
-            MultSign => Multiply,
-            DivideSign => Divide,
-            _ => panic!("not allowed")
-          };
-          f.push(MultTerm(s, value.clone())); //maybe box the value instead
+        if (rest.len() == 0) {
+          first
+        } else {
+          let mut f = Vec::new();
+          f.push(MultTerm(Multiply, first));
+          for &(ref sign, ref value) in rest.iter() {
+            let s = match *sign {
+              MultSign => Multiply,
+              DivideSign => Divide,
+              _ => panic!("not allowed")
+            };
+            f.push(MultTerm(s, value.clone())); //maybe box the value instead
+          }
+          MultDiv(f)
         }
-        MultDiv(f)
       }
     )
   }
@@ -272,17 +266,21 @@ fn expr<'a>() -> EParser<'a> {
         rep!(seq!(or!(literal(PlusSign), literal(MinusSign)), simple_expr()))
       ),
       |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
-        let mut f = Vec::new();
-        f.push(AddTerm(Add, first));
-        for &(ref sign, ref value) in rest.iter() {
-          let s = match *sign {
-            PlusSign => Add,
-            MinusSign => Subtract,
-            _ => panic!("not allowed")
-          };
-          f.push(AddTerm(s, value.clone()));
+        if (rest.len() == 0) {
+          first
+        } else {
+          let mut f = Vec::new();
+          f.push(AddTerm(Add, first));
+          for &(ref sign, ref value) in rest.iter() {
+            let s = match *sign {
+              PlusSign => Add,
+              MinusSign => Subtract,
+              _ => panic!("not allowed")
+            };
+            f.push(AddTerm(s, value.clone()));
+          }
+          AddSub(f)
         }
-        AddSub(f)
       }
     )
   }
@@ -319,7 +317,7 @@ fn test_parser<'a, I, O: PartialEq + Show>(input: I, parser: &Parser<'a, I, O>, 
 fn test_term() {
   let parser = expr();
   let input = [Number(5)];
-  let expected = AddSub(vec![AddTerm(Add, Num(5))]);
+  let expected = Num(5);
   test_parser(input.as_slice(), &*parser, expected);
 }
 
@@ -332,10 +330,19 @@ fn test_plus_sequence() {
 }
 
 #[test]
+fn test_plus_mult_sequence() {
+  let parser = expr();
+  let input = [Number(3), PlusSign, Number(4), MultSign, Number(5)];
+  let expected = AddSub(vec![AddTerm(Add, Num(3)), AddTerm(Add, MultDiv(vec![MultTerm(Multiply, Num(4)), MultTerm(Multiply, Num(5))]))]);
+  test_parser(input.as_slice(), &*parser, expected);
+}
+
+
+#[test]
 fn test_simple_assign() {
   let parser = assign();
   let input = [Ident(from_str("x").unwrap()), Equals, Number(7)];
-  let expected = Assign(from_str("x").unwrap(), AddSub(vec![AddTerm(Add, Num(7))]));
+  let expected = Assign(from_str("x").unwrap(), Num(7));
   test_parser(input.as_slice(), &*parser, expected);
 }
 
@@ -343,7 +350,7 @@ fn test_simple_assign() {
 fn test_simple_output() {
   let parser = output();
   let input = [OutputCmd, Number(4)];
-  let expected = Output(AddSub(vec![AddTerm(Add, Num(4))]));
+  let expected = Output(Num(4));
   test_parser(input.as_slice(), &*parser, expected);
 }
 
