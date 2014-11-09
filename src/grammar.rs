@@ -53,6 +53,7 @@ pub enum Statement {
   Assign(String, Expr),
   Output(Expr),
   If(Expr, Comparator, Expr, Block, Block),
+  While(Expr, Comparator, Expr, Block),
 }
 
 #[deriving(Show)]
@@ -90,6 +91,7 @@ pub enum Token {
   CloseBrace,
   IfKeyword,
   ElseKeyword,
+  WhileKeyword,
   Cmp(Comparator),
 }
 
@@ -174,7 +176,7 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
 
   //changing these to values creates weird conflicting lifetime errors
   fn ident<'a>() -> Lexer<'a> { map!(
-    box RegexCapturesParser{regex : Regex::new(r"^[ \t]*([a-z]+)[ \t]*").unwrap()},
+    box RegexCapturesParser{regex : Regex::new(r"^[ \t]*([a-zA-Z]\w*)[ \t]*").unwrap()},
     |&: caps: Captures<'a>| Ident(from_str(caps.at(1)).unwrap())
   )}
 
@@ -188,6 +190,7 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
     literal!("out",         OutputCmd),
     literal!("if",          IfKeyword),
     literal!("else",        ElseKeyword),
+    literal!("while",       WhileKeyword),
     literal!(r"\r?\n\s*",   NewLine),
     literal!(r"\(\s*",      OpenParen),
     literal!(r"\)",         CloseParen),
@@ -238,6 +241,13 @@ fn if_stmt<'a>() -> LParser<'a, Statement> {
     |&: (_, (lhs, (comp, (rhs, (then_block, (_ , else_block))))))| If(lhs, comp, rhs, then_block, else_block)
   )
 }
+
+fn while_stmt<'a>() -> LParser<'a, Statement> {
+  map!(
+    seq!(literal(WhileKeyword), expr(), comparator(), expr(), braced_block()),
+    |&: (_, (lhs, (comp, (rhs, block))))| While(lhs, comp, rhs, block)
+  )
+}
   
 
 pub fn block<'a>() -> LParser<'a, Block> {
@@ -245,7 +255,7 @@ pub fn block<'a>() -> LParser<'a, Block> {
     rep!(
       map!(
         seq!(
-          or!(output(), if_stmt(), assign()),
+          or!(output(), if_stmt(), while_stmt(), assign()),
           literal(NewLine)
         ), 
         |&: (stmt, _)| stmt
