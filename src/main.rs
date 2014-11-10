@@ -3,6 +3,7 @@
 #![feature(unboxed_closures)]
 #![feature(macro_rules)]
 extern crate regex;
+#[phase(plugin)] extern crate peruse;
 extern crate peruse;
 //extern crate regex_macros;
 //extern crate parsers;
@@ -10,11 +11,15 @@ extern crate peruse;
 use std::collections::HashMap;
 use peruse::parsers::*;
 use grammar::*;
+use parser::block;
+use lexer::token;
 use std::os;
 use std::io::File;
 
 
+pub mod lexer;
 pub mod grammar;
+pub mod parser;
 
 fn main() {
   
