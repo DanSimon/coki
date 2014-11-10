@@ -6,5 +6,5 @@ authors = [ "Dan Simon <dan@dansimon.info>" ]
 
 [dependencies.peruse]
 
-git = "file:///Users/dan/projects/hackday/peruse"
+git = "https://github.com/DanSimon/peruse.git"
 
