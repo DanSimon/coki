@@ -1,13 +1,15 @@
+# Coki
+
 Coki is a simple language written in Rust.  Right now Coki is
 interpreted, but fairly soon it will be compiled via LLVM.
 
 This is mostly just a toy language for me to:
 
 * write stuff in Rust!
-* demonstrate my peruse parser-combinator library
+* demonstrate my [peruse](https://github.com/DanSimon/peruse.git) parser-combinator library
 * try writing a LLVM front-end
 
-"Features"
+## "Features"
 
 * the only first-class type is signed integer
 * all variables are global (scope coming soon!)
