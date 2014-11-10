@@ -5,8 +5,6 @@
 extern crate regex;
 #[phase(plugin)] extern crate peruse;
 extern crate peruse;
-//extern crate regex_macros;
-//extern crate parsers;
 
 use std::collections::HashMap;
 use peruse::parsers::*;
