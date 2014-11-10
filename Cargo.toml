@@ -1,8 +1,8 @@
 [package]
 
-name = "lang"
-version = "0.0.1"
-authors = [ "Your name <you@example.com>" ]
+name = "coki"
+version = "0.1.0"
+authors = [ "Dan Simon <dan@dansimon.info>" ]
 
 [dependencies.peruse]
 
