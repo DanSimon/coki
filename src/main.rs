@@ -3,17 +3,17 @@
 #![feature(unboxed_closures)]
 #![feature(macro_rules)]
 extern crate regex;
+extern crate peruse;
 //extern crate regex_macros;
 //extern crate parsers;
 
 use std::collections::HashMap;
-use parsers::*;
+use peruse::parsers::*;
 use grammar::*;
 use std::os;
 use std::io::File;
 
 
-pub mod parsers;
 pub mod grammar;
 
 fn main() {
