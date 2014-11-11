@@ -25,8 +25,18 @@ fn output<'a>() -> LParser<'a, Statement> {
 fn if_stmt<'a>() -> LParser<'a, Statement> {
   //todo: optional else
   map!(
-    seq!(literal(IfKeyword), expr(), comparator(), expr(), braced_block(), literal(ElseKeyword), braced_block()),
-    |&: (_, (lhs, (comp, (rhs, (then_block, (_ , else_block))))))| If(lhs, comp, rhs, then_block, else_block)
+    seq!(
+      literal(IfKeyword), 
+      expr(), 
+      comparator(), 
+      expr(), 
+      braced_block(), 
+      opt!(map!(
+        seq!(literal(ElseKeyword), braced_block()),
+        |&: (_, else_block)| else_block
+      ))
+    ),
+    |&: (_, (lhs, (comp, (rhs, (then_block, else_block_opt)))))| If(lhs, comp, rhs, then_block, else_block_opt)
   )
 }
 

@@ -83,9 +83,15 @@ fn run(prog: &Vec<Statement>) {
         },
         If(ref lhs, ref cmp, ref rhs, ref then_block, ref else_block) => {
           let is_true = compare(lhs, cmp, rhs, env);
-          let &Block(ref p) = if (is_true) { then_block } else { else_block };
-          //fixme: need to respect block scopes
-          run_internal(p, env);
+          if (is_true) {            
+            let &Block(ref p) = then_block;
+            run_internal(p, env);
+          } else {
+            match else_block {
+              &Some(Block(ref p)) => {run_internal(p, env);}
+              &None => {}
+            }
+          }
         }
         While(ref lhs, ref cmp, ref rhs, ref block) => {
           let &Block(ref stmts) = block;

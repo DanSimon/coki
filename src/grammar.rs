@@ -49,7 +49,7 @@ pub struct Block(pub Vec<Statement>);
 pub enum Statement {
   Assign(String, Expr),
   Output(Expr),
-  If(Expr, Comparator, Expr, Block, Block),
+  If(Expr, Comparator, Expr, Block, Option<Block>),
   While(Expr, Comparator, Expr, Block),
 }
 
