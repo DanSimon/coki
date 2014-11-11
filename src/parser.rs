@@ -32,7 +32,13 @@ fn if_stmt<'a>() -> LParser<'a, Statement> {
       expr(), 
       braced_block(), 
       opt!(map!(
-        seq!(literal(ElseKeyword), braced_block()),
+        seq!(
+          literal(ElseKeyword), 
+          or!(
+            braced_block(), 
+            coerce(map!(if_stmt(), |&: if_stmt| Block(vec![if_stmt]))) //else if...
+          )
+        ),
         |&: (_, else_block)| else_block
       ))
     ),
