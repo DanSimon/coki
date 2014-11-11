@@ -33,5 +33,26 @@ while i < 30 {
 
 ```
 
+Here's an example of "fizzbuzz".  Since Coki doesn't have strings yet, we'll
+use "1" as "fizz" and "0" as "buzz".  Also there's no logical connectives yet
+(soon!!)
+```
+n = 1
+
+while n <= 100 {
+  if n % 3 == 0 {
+    if n % 5 == 0 {
+      out 10
+    } else {
+      out 1
+    }
+  } else if n % 5 == 0 {
+    out 0
+  }
+  n = n + 1
+}
+```
+
+
 The name comes from Coki Beach in St. Thomas, US VI, which is where I was when
 I decided this project needed a name.
