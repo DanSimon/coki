@@ -146,8 +146,9 @@ fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
       for &MultTerm(ref sign,ref op) in ops.iter() {
         match eval(op, env) {
           Ok(value) => match *sign{
-            Multiply => {total *= value;}
-            Divide  => {total /= value;}
+            Multiply  => {total *= value;}
+            Divide    => {total /= value;}
+            Modulo    => {total %= value;} 
           },
           Err(err) => {
             return Err(err);

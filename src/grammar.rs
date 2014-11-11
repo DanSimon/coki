@@ -14,6 +14,7 @@ pub enum AddOp {
 pub enum MultOp {
   Multiply,
   Divide,
+  Modulo,
 }
 
 #[deriving(Clone)]
@@ -80,6 +81,7 @@ pub enum Token {
   MinusSign,
   MultSign,
   DivideSign,
+  ModuloSign,
   OutputCmd,
   NewLine,
   OpenParen,

@@ -51,6 +51,7 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
     literal!("=",           Equals),
     literal!(r"\*",         MultSign),
     literal!("/",           DivideSign),
+    literal!(r"%",           ModuloSign),
     number(),
     ident()
   ))

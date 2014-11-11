@@ -117,7 +117,7 @@ fn expr<'a>() -> EParser<'a> {
     map!(
       seq!(
         term(),
-        rep!(seq!(or!(literal(MultSign), literal(DivideSign)), term()))
+        rep!(seq!(or!(literal(MultSign), literal(DivideSign), literal(ModuloSign)), term()))
       ),
       |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
         if rest.len() == 0 {
@@ -129,7 +129,8 @@ fn expr<'a>() -> EParser<'a> {
             let s = match *sign {
               MultSign => Multiply,
               DivideSign => Divide,
-              _ => panic!("not allowed")
+              ModuloSign => Modulo,
+              _ => unreachable!()
             };
             f.push(MultTerm(s, value.clone())); //maybe box the value instead
           }
