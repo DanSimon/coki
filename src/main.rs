@@ -9,7 +9,7 @@ extern crate peruse;
 use std::collections::HashMap;
 use peruse::parsers::*;
 use grammar::*;
-use parser::block;
+use parser::program;
 use lexer::token;
 use std::os;
 use std::io::File;
@@ -35,7 +35,7 @@ fn main() {
           if rest != "" {
             println!("Parser error at: {}", rest)
           } else {
-            let parser = block();
+            let parser = program();
             match parser.parse(tokens.as_slice()) {
               Ok((Block(stmts), rest)) => {
                 if rest.len() > 0 {
