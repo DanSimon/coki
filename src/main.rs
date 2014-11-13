@@ -184,9 +184,12 @@ while i < 30 {
   i = i + 1
 }
 ";
-    b.iter(|| {
-      interp(prog); 
-    })
+  let lexer = token();
+  let (tokens, rest) = lexer.parse(prog).unwrap();
+  let parser = program();
+  b.iter(|| {
+    parser.parse(tokens.as_slice());
+  })
 }
   
 
