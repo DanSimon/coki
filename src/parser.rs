@@ -216,16 +216,16 @@ fn test_plus_mult_sequence() {
 
 #[test]
 fn test_simple_assign() {
-  let parser = assign();
+  let parser = assign!();
   let input = [Ident(from_str("x").unwrap()), Equals, Number(7)];
   let expected = Assign(from_str("x").unwrap(), Num(7));
-  test_parser(input.as_slice(), &*parser, expected);
+  test_parser(input.as_slice(), &parser, expected);
 }
 
 #[test]
 fn test_simple_output() {
-  let parser = output();
+  let parser = output!();
   let input = [OutputCmd, Number(4)];
   let expected = Output(Num(4));
-  test_parser(input.as_slice(), &*parser, expected);
+  test_parser(input.as_slice(), &parser, expected);
 }
