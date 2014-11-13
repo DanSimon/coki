@@ -5,6 +5,10 @@
 extern crate regex;
 #[phase(plugin)] extern crate peruse;
 extern crate peruse;
+extern crate test;
+
+use std::mem::replace;
+use test::Bencher;
 
 use std::collections::HashMap;
 use peruse::parsers::*;
@@ -29,29 +33,7 @@ fn main() {
 
   match contents {
     Ok(raw) => {
-      let lexer = token();
-      match lexer.parse(raw.as_slice()) {
-        Ok((tokens, rest)) => {
-          if rest != "" {
-            println!("Parser error at: {}", rest)
-          } else {
-            let parser = block();
-            match parser.parse(tokens.as_slice()) {
-              Ok((Block(stmts), rest)) => {
-                if rest.len() > 0 {
-                  println!("Error: unexpected token {}", rest[0]);
-                } else {
-                  run(&stmts);
-                }
-              }
-              Err(err) => {println!("Parse Error: {}", err);}
-            };
-          }
-        },
-        Err(err) => {
-          println!("Lexer error: {}", err);
-        }
-      }
+      interp(raw.as_slice());
     }
     Err(err) => {println!("Error Reading File: {}", err);}
   }
@@ -59,6 +41,33 @@ fn main() {
 }
 
 type Environment = HashMap<String, int>;
+
+fn interp<'a>(raw: &'a str) {
+  let lexer = token();
+  match lexer.parse(raw) {
+    Ok((tokens, rest)) => {
+      if rest != "" {
+        println!("Parser error at: {}", rest)
+      } else {
+        let parser = block();
+        match parser.parse(tokens.as_slice()) {
+          Ok((Block(stmts), rest)) => {
+            if rest.len() > 0 {
+              println!("Error: unexpected token {}", rest[0]);
+            } else {
+              run(&stmts);
+            }
+          }
+          Err(err) => {println!("Parse Error: {}", err);}
+        };
+      }
+    },
+    Err(err) => {
+      println!("Lexer error: {}", err);
+    }
+  }
+
+}
 
 
 fn run(prog: &Vec<Statement>) {
@@ -158,6 +167,29 @@ fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
       Ok(total)
     }
   }
+}
+
+
+#[bench]
+fn bench_run(b: &mut Bencher) {
+    let prog = "n1 = 1
+n2 = 1
+n = n1 + n2
+i = 0
+
+while i < 30 {
+  n2 = n1
+  n1 = n
+  n = n1 + n2
+  i = i + 1
+}
+";
+  let lexer = token();
+  let (tokens, rest) = lexer.parse(prog).unwrap();
+  let parser = block();
+  b.iter(|| {
+    parser.parse(tokens.as_slice());
+  })
 }
   
 
