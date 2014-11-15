@@ -7,4 +7,5 @@ authors = [ "Dan Simon <dan@dansimon.info>" ]
 [dependencies.peruse]
 
 git = "https://github.com/DanSimon/peruse.git"
+branch = "unboxing"
 

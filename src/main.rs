@@ -13,7 +13,7 @@ use test::Bencher;
 use std::collections::HashMap;
 use peruse::parsers::*;
 use grammar::*;
-use parser::block;
+use parser::program;
 use lexer::token;
 use std::os;
 use std::io::File;
@@ -49,7 +49,7 @@ fn interp<'a>(raw: &'a str) {
       if rest != "" {
         println!("Parser error at: {}", rest)
       } else {
-        let parser = block();
+        let parser = program();
         match parser.parse(tokens.as_slice()) {
           Ok((Block(stmts), rest)) => {
             if rest.len() > 0 {
@@ -186,12 +186,11 @@ while i < 30 {
 ";
   let lexer = token();
   let (tokens, rest) = lexer.parse(prog).unwrap();
-  let parser = block();
+  let parser = program();
   b.iter(|| {
     parser.parse(tokens.as_slice());
   })
 }
-  
 
 #[bench]
 fn bench_fizzbuzz(b: &mut Bencher) {
@@ -212,8 +211,10 @@ while n <= 100 {
 ";
   let lexer = token();
   let (tokens, rest) = lexer.parse(prog).unwrap();
-  let parser = block();
+  let parser = program();
   b.iter(|| {
     parser.parse(tokens.as_slice());
   })
 }
+  
+

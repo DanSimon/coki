@@ -4,39 +4,79 @@ use grammar::*;
 
 pub type LParser<'a, T> = Box<Parser<'a, &'a [Token], T> + 'a>;
 
+macro_rules! variable { () => {
+  MatchParser{
+    matcher: box |&: input: &Token| match input {
+      &Ident(ref str) => Ok(Variable(str.clone())),
+      other => Err(format!("Expected variable, got {}", other))
+    }
+  }
+}}
 
-fn assign<'a>() -> LParser<'a, Statement> {
+macro_rules! assign { () => {
   map!( 
-    seq!(variable(), literal(Equals), expr()),
+    seq!(variable!(), literal(Equals), lazy!(expr())),
     |&: (var,( _, expr))| match var{
       Variable(name) => Assign(name, expr),
       _ => unreachable!()
     }
   )
-}
+}}
 
-fn output<'a>() -> LParser<'a, Statement> {
+macro_rules! output{ () => {
   map!(
-    seq!(literal(OutputCmd), expr()),
+    seq!(literal(OutputCmd), lazy!(expr())),
     |&: (_, var): (Token, Expr)| Output(var)
   )
-}
+}}
+
+macro_rules! block { () => {
+  map!(
+    rep!(
+      map!(
+        seq!(
+          or!(output!(), lazy!(if_stmt()), lazy!(while_stmt()), assign!()),
+          literal(NewLine)
+        ), 
+        |&: (stmt, _)| stmt
+      )
+    ),
+    |&: stmts| Block(stmts)
+  )
+
+}}
+
+macro_rules! braced_block { () => {
+  map!(
+    seq!(literal(OpenBrace), block!(), literal(CloseBrace)),
+    |&: (_, (block, _))| block
+  )
+}}
+
+macro_rules! comparator { () => {
+  MatchParser{
+    matcher: box |&: input: &Token| match *input {
+      Cmp(c) => Ok(c),
+      ref other => Err(format!("Expected comparator, got {}", other))
+    }
+  }
+}}
 
 fn if_stmt<'a>() -> LParser<'a, Statement> {
   //todo: optional else
-  map!(
+  box map!(
     seq!(
       literal(IfKeyword), 
-      expr(), 
-      comparator(), 
-      expr(), 
-      braced_block(), 
+      lazy!(expr()), 
+      comparator!(), 
+      lazy!(expr()), 
+      braced_block!(), 
       opt!(map!(
         seq!(
           literal(ElseKeyword), 
           or!(
-            braced_block(), 
-            coerce(map!(if_stmt(), |&: if_stmt| Block(vec![if_stmt]))) //else if...
+            braced_block!(), 
+            map!(lazy!(if_stmt()), |&: if_stmt| Block(vec![if_stmt])) //else if...
           )
         ),
         |&: (_, else_block)| else_block
@@ -47,77 +87,44 @@ fn if_stmt<'a>() -> LParser<'a, Statement> {
 }
 
 fn while_stmt<'a>() -> LParser<'a, Statement> {
-  map!(
-    seq!(literal(WhileKeyword), expr(), comparator(), expr(), braced_block()),
+  box map!(
+    seq!(literal(WhileKeyword), lazy!(expr()), comparator!(), lazy!(expr()), braced_block!()),
     |&: (_, (lhs, (comp, (rhs, block))))| While(lhs, comp, rhs, block)
   )
 }
   
 
-pub fn block<'a>() -> LParser<'a, Block> {
-  map!(
-    rep!(
-      map!(
-        seq!(
-          or!(output(), if_stmt(), while_stmt(), assign()),
-          literal(NewLine)
-        ), 
-        |&: (stmt, _)| stmt
-      )
-    ),
-    |&: stmts| Block(stmts)
-  )
-
-}
-
-pub fn braced_block<'a>() -> LParser<'a, Block> {
-  map!(
-    seq!(literal(OpenBrace), block(), literal(CloseBrace)),
-    |&: (_, (block, _))| block
-  )
-}
-
-pub fn comparator<'a>() -> LParser<'a, Comparator> {
-  box MatchParser{
-    matcher: box |&: input: &Token| match *input {
-      Cmp(c) => Ok(c),
-      ref other => Err(format!("Expected comparator, got {}", other))
-    }
-  }
-}
 
   
 
-
-fn variable<'a>() -> LParser<'a, Expr> {
-  box MatchParser{
-    matcher: box |&: input: &Token| match input {
-      &Ident(ref str) => Ok(Variable(str.clone())),
-      other => Err(format!("Expected variable, got {}", other))
-    }
-  }
+pub fn program<'a>() -> LParser<'a, Block> {
+  box block!()
 }
+
 
 type EParser<'a> = LParser<'a, Expr>;
 
 fn expr<'a>() -> EParser<'a> {
 
-  fn number<'a>() -> EParser<'a> {
-    box MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match *input {
-      Number(num) => Ok(Num(num)),
-      ref other => Err(format!("wrong type, expected number, got {}", other))
-    }}
-  }
+  macro_rules! number { () => { MatchParser{matcher: box |&: input: &Token| -> Result<Expr, String> match *input {
+    Number(num) => Ok(Num(num)),
+    ref other => Err(format!("wrong type, expected number, got {}", other))
+  }}}}
 
-  fn term<'a>() -> EParser<'a> {
-    or!(paren_expr(), variable(), number())
-  }
+  macro_rules! paren_expr  { () => {
+    map!(
+      seq!(literal(OpenParen), lazy!(expr()), literal(CloseParen)),
+      |&: (_, (expr, _))| expr
+    )
+  }}
 
-  fn mult<'a>() -> EParser<'a> {
+  macro_rules! term { () =>  {or!(paren_expr!(), variable!(), number!())}}
+
+  let mult = || {
     map!(
       seq!(
-        term(),
-        rep!(seq!(or!(literal(MultSign), literal(DivideSign), literal(ModuloSign)), term()))
+        term!(),
+        rep!(seq!(or!(literal(MultSign), literal(DivideSign), literal(ModuloSign)), term!()))
       ),
       |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
         if rest.len() == 0 {
@@ -138,17 +145,16 @@ fn expr<'a>() -> EParser<'a> {
         }
       }
     )
-  }
+  };
 
-  fn simple_expr<'a>() -> EParser<'a> {
-    or!(mult(), term()) 
-  }
+  
+  macro_rules! simple_expr { () => { or!(mult(), term!()) }}
 
-  fn plus<'a>() -> EParser<'a> {
+  let plus = {
     map!(
       seq!(
-        simple_expr(),
-        rep!(seq!(or!(literal(PlusSign), literal(MinusSign)), simple_expr()))
+        simple_expr!(),
+        rep!(seq!(or!(literal(PlusSign), literal(MinusSign)), simple_expr!()))
       ),
       |&: (first, rest): (Expr, Vec<(Token, Expr)>)| {
         if rest.len() == 0 {
@@ -168,16 +174,10 @@ fn expr<'a>() -> EParser<'a> {
         }
       }
     )
-  }
+  };
 
-  fn paren_expr<'a>() -> EParser<'a> {
-    map!(
-      seq!(literal(OpenParen), expr(), literal(CloseParen)),
-      |&: (_, (expr, _))| expr
-    )
-  }
 
-  plus()
+  box plus
 }
 
 fn test_parser<'a, I, O: PartialEq + Show>(input: I, parser: &Parser<'a, I, O>, expected: O) {
@@ -216,16 +216,16 @@ fn test_plus_mult_sequence() {
 
 #[test]
 fn test_simple_assign() {
-  let parser = assign();
+  let parser = assign!();
   let input = [Ident(from_str("x").unwrap()), Equals, Number(7)];
   let expected = Assign(from_str("x").unwrap(), Num(7));
-  test_parser(input.as_slice(), &*parser, expected);
+  test_parser(input.as_slice(), &parser, expected);
 }
 
 #[test]
 fn test_simple_output() {
-  let parser = output();
+  let parser = output!();
   let input = [OutputCmd, Number(4)];
   let expected = Output(Num(4));
-  test_parser(input.as_slice(), &*parser, expected);
+  test_parser(input.as_slice(), &parser, expected);
 }
