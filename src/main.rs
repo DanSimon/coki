@@ -191,5 +191,30 @@ while i < 30 {
     parser.parse(tokens.as_slice());
   })
 }
+
+#[bench]
+fn bench_fizzbuzz(b: &mut Bencher) {
+    let prog = "n = 1
+
+while n <= 100 {
+  if n % 3 == 0 {
+    if n % 5 == 0 {
+      out 10
+    } else {
+      out 1
+    }
+  } else if n % 5 == 0 {
+    out 0
+  }
+  n = n + 1
+}
+";
+  let lexer = token();
+  let (tokens, rest) = lexer.parse(prog).unwrap();
+  let parser = program();
+  b.iter(|| {
+    parser.parse(tokens.as_slice());
+  })
+}
   
 
