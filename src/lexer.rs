@@ -1,6 +1,5 @@
-use peruse::parsers::*;
 use regex::{Captures, Regex};
-use std::fmt::Show;
+use peruse::parsers::{RegexCapturesParser, RegexLiteralParser, Parser};
 
 use grammar::*;
 

@@ -182,7 +182,7 @@ fn expr<'a>() -> EParser<'a> {
 
 fn test_parser<'a, I, O: PartialEq + Show>(input: I, parser: &Parser<'a, I, O>, expected: O) {
   match parser.parse(input) {
-    Ok((output, rest)) => {
+    Ok((output, _)) => {
       assert_eq!(output, expected);
     },
     Err(err) => panic!(err)

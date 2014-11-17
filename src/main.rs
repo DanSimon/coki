@@ -7,11 +7,10 @@ extern crate regex;
 extern crate peruse;
 extern crate test;
 
-use std::mem::replace;
+#[test]
 use test::Bencher;
 
 use std::collections::HashMap;
-use peruse::parsers::*;
 use grammar::*;
 use parser::program;
 use lexer::token;
@@ -92,7 +91,7 @@ fn run(prog: &Vec<Statement>) {
         },
         If(ref lhs, ref cmp, ref rhs, ref then_block, ref else_block) => {
           let is_true = compare(lhs, cmp, rhs, env);
-          if (is_true) {            
+          if is_true {            
             let &Block(ref p) = then_block;
             run_internal(p, env);
           } else {
@@ -104,7 +103,7 @@ fn run(prog: &Vec<Statement>) {
         }
         While(ref lhs, ref cmp, ref rhs, ref block) => {
           let &Block(ref stmts) = block;
-          while(compare(lhs, cmp, rhs, env)) {
+          while compare(lhs, cmp, rhs, env) {
             run_internal(stmts, env);
           }
         }
@@ -130,7 +129,7 @@ fn compare(lhs: &Expr, cmp: &Comparator, rhs: &Expr, env: &Environment) -> bool 
 
 fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
   match *expr {
-    Variable(ref var) => match env.find(var) {
+    Variable(ref var) => match env.get(var) {
       Some(val) => Ok(*val),
       None => Err(format!("Undefined var {}", var)),
     },
