@@ -1,4 +1,3 @@
-use std::fmt::Show;
 
 #[deriving(Show)]
 #[deriving(Clone)]
