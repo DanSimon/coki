@@ -1,51 +1,51 @@
 
-#[deriving(Show)]
-#[deriving(Clone)]
-#[deriving(PartialEq)]
+#[derive(Show)]
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum AddOp {
   Add,
   Subtract,
 }
 
-#[deriving(Show)]
-#[deriving(Clone)]
-#[deriving(PartialEq)]
+#[derive(Show)]
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum MultOp {
   Multiply,
   Divide,
   Modulo,
 }
 
-#[deriving(Clone)]
-#[deriving(Show)]
-#[deriving(PartialEq)]
+#[derive(Clone)]
+#[derive(Show)]
+#[derive(PartialEq)]
 pub struct AddTerm(pub AddOp, pub Expr);
 
-#[deriving(Clone)]
-#[deriving(Show)]
-#[deriving(PartialEq)]
+#[derive(Clone)]
+#[derive(Show)]
+#[derive(PartialEq)]
 pub struct MultTerm(pub MultOp, pub Expr);
 
-#[deriving(Show)]
-#[deriving(Clone)]
-#[deriving(PartialEq)]
+#[derive(Show)]
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum Expr {
   Variable(String),  
-  Num(int),
+  Num(i32),
   AddSub(Vec<AddTerm>), //a + b - c + d becomes [(+ a) (+ b) (- c) (+ d)]
   MultDiv(Vec<MultTerm>), 
 }
 
 
 //for now this is it's own type and not a statement
-#[deriving(Show)]
-#[deriving(Clone)]
-#[deriving(PartialEq)]
+#[derive(Show)]
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub struct Block(pub Vec<Statement>);
 
-#[deriving(Show)]
-#[deriving(Clone)]
-#[deriving(PartialEq)]
+#[derive(Show)]
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum Statement {
   Assign(String, Expr),
   Output(Expr),
@@ -53,10 +53,10 @@ pub enum Statement {
   While(Expr, Comparator, Expr, Block),
 }
 
-#[deriving(Show)]
-#[deriving(Clone)]
-#[deriving(Eq)]
-#[deriving(PartialEq)]
+#[derive(Show)]
+#[derive(Clone)]
+#[derive(Eq)]
+#[derive(PartialEq)]
 pub enum Comparator {
   CEq,  // ==
   CGt,  // >
@@ -68,14 +68,14 @@ pub enum Comparator {
 
 
 
-#[deriving(Show)]
-#[deriving(Eq)]
-#[deriving(PartialEq)]
-#[deriving(Clone)]
+#[derive(Show)]
+#[derive(Eq)]
+#[derive(PartialEq)]
+#[derive(Clone)]
 pub enum Token {
   Equals,
   Ident(String),
-  Number(int),
+  Number(i32),
   PlusSign,
   MinusSign,
   MultSign,

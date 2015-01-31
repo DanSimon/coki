@@ -8,3 +8,7 @@ authors = [ "Dan Simon <dan@dansimon.info>" ]
 
 git = "https://github.com/DanSimon/peruse.git"
 
+[dependencies]
+regex = "0.1.10"
+
+

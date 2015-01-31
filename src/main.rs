@@ -1,10 +1,6 @@
-#![feature(globs)]
-#![feature(phase)]
 #![feature(unboxed_closures)]
-#![feature(macro_rules)]
 extern crate regex;
-#[phase(plugin)] extern crate peruse;
-extern crate peruse;
+#[macro_use] extern crate peruse;
 extern crate test;
 
 #[test]
@@ -15,7 +11,7 @@ use grammar::*;
 use parser::program;
 use lexer::token;
 use std::os;
-use std::io::File;
+use std::old_io::File;
 
 
 pub mod lexer;
@@ -32,37 +28,37 @@ fn main() {
 
   match contents {
     Ok(raw) => {
-      interp(raw.as_slice());
+     interp(raw.as_slice());
     }
-    Err(err) => {println!("Error Reading File: {}", err);}
+    Err(err) => {println!("Error Reading File: {:?}", err);}
   }
 
 }
 
-type Environment = HashMap<String, int>;
+type Environment = HashMap<String,i32>;
 
 fn interp<'a>(raw: &'a str) {
   let lexer = token();
   match lexer.parse(raw) {
     Ok((tokens, rest)) => {
       if rest != "" {
-        println!("Parser error at: {}", rest)
+        println!("Parser error at: {:?}", rest)
       } else {
         let parser = program();
         match parser.parse(tokens.as_slice()) {
           Ok((Block(stmts), rest)) => {
             if rest.len() > 0 {
-              println!("Error: unexpected token {}", rest[0]);
+              println!("Error: unexpected token {:?}", rest[0]);
             } else {
               run(&stmts);
             }
           }
-          Err(err) => {println!("Parse Error: {}", err);}
+          Err(err) => {println!("Parse Error: {:?}", err);}
         };
       }
     },
     Err(err) => {
-      println!("Lexer error: {}", err);
+      println!("Lexer error: {:?}", err);
     }
   }
 
@@ -70,10 +66,10 @@ fn interp<'a>(raw: &'a str) {
 
 
 fn run(prog: &Vec<Statement>) {
-  fn run_internal(prog: &Vec<Statement>, env: &mut Environment) {
+  fn runi32ernal(prog: &Vec<Statement>, env: &mut Environment) {
     for s in prog.iter() {
       match *s {
-        Assign(ref var, ref expr) => {
+        Statement::Assign(ref var, ref expr) => {
           match eval(expr, env) {
             Ok(res)   => {env.insert(var.clone(), res);}
             Err(err)  => {
@@ -82,65 +78,65 @@ fn run(prog: &Vec<Statement>) {
             }
           }
         },
-        Output(ref expr) => match eval(expr, env) {
+        Statement::Output(ref expr) => match eval(expr, env) {
           Ok(val) => {println!("{}", val)}
           Err(err) => {
-            println!("ERROR: {}", err)
+            println!("ERROR: {}", err);
             return;
           }
         },
-        If(ref lhs, ref cmp, ref rhs, ref then_block, ref else_block) => {
+        Statement::If(ref lhs, ref cmp, ref rhs, ref then_block, ref else_block) => {
           let is_true = compare(lhs, cmp, rhs, env);
           if is_true {            
             let &Block(ref p) = then_block;
-            run_internal(p, env);
+            runi32ernal(p, env);
           } else {
             match else_block {
-              &Some(Block(ref p)) => {run_internal(p, env);}
+              &Some(Block(ref p)) => {runi32ernal(p, env);}
               &None => {}
             }
           }
         }
-        While(ref lhs, ref cmp, ref rhs, ref block) => {
+        Statement::While(ref lhs, ref cmp, ref rhs, ref block) => {
           let &Block(ref stmts) = block;
           while compare(lhs, cmp, rhs, env) {
-            run_internal(stmts, env);
+            runi32ernal(stmts, env);
           }
         }
       }
     }
   }
-  let mut env: HashMap<String, int> = HashMap::new();
-  run_internal(prog, &mut env);
+  let mut env: HashMap<String,i32> = HashMap::new();
+  runi32ernal(prog, &mut env);
 }
 
 fn compare(lhs: &Expr, cmp: &Comparator, rhs: &Expr, env: &Environment) -> bool {
   let l = eval(lhs, env);
   let r = eval(rhs, env);
   match *cmp {
-    CEq   => l == r,
-    CNeq  => l != r,
-    CLt   => l < r,
-    CGt   => l > r,
-    CLeq  => l <= r,
-    CGeq  => l >= r,
+    Comparator::CEq   => l == r,
+    Comparator::CNeq  => l != r,
+    Comparator::CLt   => l < r,
+    Comparator::CGt   => l > r,
+    Comparator::CLeq  => l <= r,
+    Comparator::CGeq  => l >= r,
   }
 }
 
-fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
+fn eval(expr: &Expr, env: &HashMap<String,i32>) -> Result<i32, String> {
   match *expr {
-    Variable(ref var) => match env.get(var) {
+    Expr::Variable(ref var) => match env.get(var) {
       Some(val) => Ok(*val),
       None => Err(format!("Undefined var {}", var)),
     },
-    Num(val) => Ok(val),
-    AddSub(ref ops) => {
-      let mut sum = 0i;
+    Expr::Num(val) => Ok(val),
+    Expr::AddSub(ref ops) => {
+      let mut sum = 0;
       for &AddTerm(ref sign, ref op) in ops.iter() {
         match eval(op, env) {
           Ok(value) => match *sign {
-            Add => {sum += value;}
-            Subtract => {sum -= value;}
+            AddOp::Add => {sum += value;}
+            AddOp::Subtract => {sum -= value;}
           },
           Err(err) => {
             return Err(err);
@@ -149,14 +145,14 @@ fn eval(expr: &Expr, env: &HashMap<String, int>) -> Result<int, String> {
       }
       Ok(sum)
     },
-    MultDiv(ref ops) => {
-      let mut total = 1i;
+    Expr::MultDiv(ref ops) => {
+      let mut total = 1;
       for &MultTerm(ref sign,ref op) in ops.iter() {
         match eval(op, env) {
           Ok(value) => match *sign{
-            Multiply  => {total *= value;}
-            Divide    => {total /= value;}
-            Modulo    => {total %= value;} 
+            MultOp::Multiply  => {total *= value;}
+            MultOp::Divide    => {total /= value;}
+            MultOp::Modulo    => {total %= value;} 
           },
           Err(err) => {
             return Err(err);
