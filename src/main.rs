@@ -1,17 +1,22 @@
 #![feature(unboxed_closures)]
+#![feature(collections)]
+#![feature(convert)]
 extern crate regex;
-#[macro_use] extern crate peruse;
-extern crate test;
+extern crate peruse;
+//extern crate test;
 
-#[test]
-use test::Bencher;
+//#[test]
+//use test::Bencher;
 
 use std::collections::HashMap;
 use grammar::*;
 use parser::program;
 use lexer::token;
 use std::os;
-use std::old_io::File;
+use std::fs::File;
+use std::env::args;
+use std::path::Path;
+use std::io::Read;
 
 
 pub mod lexer;
@@ -20,18 +25,15 @@ pub mod parser;
 
 fn main() {
   
-  let args = os::args();
+  let mut args = args();
 
-  let file = &args[1];
+  let file = args.nth(1).unwrap();
   
-  let contents = File::open(&Path::new(file.as_slice())).read_to_string();
+  let mut contents = String::new();
+  let mut f = File::open(file.as_str()).unwrap();
+  f.read_to_string(&mut contents);
 
-  match contents {
-    Ok(raw) => {
-     interp(raw.as_slice());
-    }
-    Err(err) => {println!("Error Reading File: {:?}", err);}
-  }
+  interp(contents.as_str());
 
 }
 
@@ -164,7 +166,7 @@ fn eval(expr: &Expr, env: &HashMap<String,i32>) -> Result<i32, String> {
   }
 }
 
-
+/*
 #[bench]
 fn bench_run(b: &mut Bencher) {
     let prog = "n1 = 1
@@ -211,5 +213,7 @@ while n <= 100 {
     parser.parse(tokens.as_slice());
   })
 }
+
+*/
   
 

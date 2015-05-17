@@ -1,24 +1,24 @@
 use regex::{Captures, Regex};
-use peruse::parsers::{RegexCapturesParser, RegexLiteralParser, Parser};
+use peruse::slice_parsers::*;
+use peruse::string_parsers::*;
 
 use grammar::*;
 use std::str::FromStr;
 
-type Lexer<'a> = Box<Parser<'a, &'a str, Token> + 'a>;
+//type Lexer = SliceParser<I=str, O=Token>;
 
 
-pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
+pub fn token() -> Box<SliceParser<I=str, O=Vec<Token>>> {
 
-  macro_rules! literal {
-    ($reg: expr, $tok: expr) => {
-      map!(
-        RegexLiteralParser{regex : Regex::new((String::from_str(r"^[ \t]*") + $reg).as_slice()).unwrap()},
-        |&: ()| $tok
-      )
-    }
-  }
+  let lt = |s: &str, t: Token| {
+    str_lit((String::from_str(r"^[ \t]*") + s).as_str(), t)
+  };
+
+  Box::new(lt("foo", Token::NewLine).repeat())
 
   //changing these to values creates weird conflicting lifetime errors
+
+  /*
   let ident = map!(
     RegexCapturesParser{regex : Regex::new(r"^[ \t]*([a-zA-Z]\w*)[ \t]*").unwrap()},
     |&: caps: Captures<'a>| Token::Ident(String::from_str(caps.at(1).unwrap()))
@@ -28,6 +28,9 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
     RegexCapturesParser{regex : Regex::new(r"^[ \t]*(\d+)[ \t]*").unwrap()},
     |&: caps: Captures<'a>| Token::Number(FromStr::from_str(caps.at(1).unwrap()).unwrap())
   );
+  */
+
+  /*
 
   Box::new( rep!(or!(
     literal!("out",         Token::OutputCmd),
@@ -54,5 +57,6 @@ pub fn token<'a>() -> Box<Parser<'a, &'a str, Vec<Token>> + 'a> {
     number,
     ident
   )))
+  */
 
 }

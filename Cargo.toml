@@ -7,6 +7,7 @@ authors = [ "Dan Simon <dan@dansimon.info>" ]
 [dependencies.peruse]
 
 git = "https://github.com/DanSimon/peruse.git"
+branch = "no-slice"
 
 [dependencies]
 regex = "0.1.10"
