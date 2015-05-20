@@ -43,6 +43,7 @@ fn interp<'a>(raw: &'a str) {
   let lexer = token();
   match lexer.parse(raw) {
     Ok((tokens, rest)) => {
+      println!("{:?}", tokens);
       if rest != "" {
         println!("Parser error at: {:?}", rest)
       } else {
