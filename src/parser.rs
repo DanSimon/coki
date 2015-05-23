@@ -88,16 +88,16 @@ pub fn program() -> Box<SliceParser<I=[Token], O=Block>> {
 
     let else_block = lit(Token::ElseKeyword)
       .then_r(
-        recursive(|| if_stmt()).map(|i| Block(vec![i]))
+        recursive(if_stmt).map(|i| Block(vec![i]))
         .or(boxed(code_block()))
       );
 
     let p = lit(Token::IfKeyword)
       .then_r(recursive(|| expression()))
       .then(comparator())
-      .then(recursive(|| expression()))
+      .then(recursive(expression))
       .then_l(lit(Token::OpenBrace))
-      .then(recursive(|| program()))
+      .then(recursive(program))
       .then_l(lit(Token::CloseBrace))
       .then(opt(else_block))
       .map(|((((l, cmp), r), block), else_opt)| Statement::If(l, cmp, r, block, else_opt));
@@ -107,11 +107,11 @@ pub fn program() -> Box<SliceParser<I=[Token], O=Block>> {
 
   let while_stmt = {
     let p = lit(Token::WhileKeyword)
-      .then_r(recursive(|| expression()))
+      .then_r(recursive(expression))
       .then(comparator())
-      .then(recursive(|| expression()))
+      .then(recursive(expression))
       .then_l(lit(Token::OpenBrace))
-      .then(recursive(|| program()))
+      .then(recursive(program))
       .then_l(lit(Token::CloseBrace))
       .map(|(((l, cmp), r), block)| Statement::While(l, cmp, r, block));
     boxed(Box::new(p))
