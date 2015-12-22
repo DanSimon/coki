@@ -1,3 +1,4 @@
+#![feature(custom_derive)]
 #![feature(unboxed_closures)]
 #![feature(collections)]
 #![feature(convert)]

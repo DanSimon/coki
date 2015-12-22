@@ -11,10 +11,10 @@ use std::str::FromStr;
 pub fn token() -> Box<SliceParser<I=str, O=Vec<Token>>> {
 
   fn lt(s: &str, t: Token) -> RegexLiteralParser<Token> {
-    str_lit((String::from_str(r"^[ \t]*") + s).as_str(), t)
+    str_lit((String::from_str(r"^[ \t]*").unwrap() + s).as_str(), t)
   }
 
-  let ident = capture(r"^[ \t]*([a-zA-Z]\w*)[ \t]*", |caps| Token::Ident(String::from_str(caps.at(1).unwrap()))); 
+  let ident = capture(r"^[ \t]*([a-zA-Z]\w*)[ \t]*", |caps| Token::Ident(String::from_str(caps.at(1).unwrap()).unwrap()));
 
   let number = capture(r"^[ \t]*(\d+)[ \t]*", |caps| Token::Number(FromStr::from_str(caps.at(1).unwrap()).unwrap()));
 
