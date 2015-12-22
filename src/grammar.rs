@@ -1,5 +1,5 @@
 
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum AddOp {
@@ -7,7 +7,7 @@ pub enum AddOp {
   Subtract,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum MultOp {
@@ -17,16 +17,16 @@ pub enum MultOp {
 }
 
 #[derive(Clone)]
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(PartialEq)]
 pub struct AddTerm(pub AddOp, pub Expr);
 
 #[derive(Clone)]
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(PartialEq)]
 pub struct MultTerm(pub MultOp, pub Expr);
 
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Expr {
@@ -38,12 +38,12 @@ pub enum Expr {
 
 
 //for now this is it's own type and not a statement
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub struct Block(pub Vec<Statement>);
 
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Statement {
@@ -53,7 +53,7 @@ pub enum Statement {
   While(Expr, Comparator, Expr, Block),
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(Clone)]
 #[derive(Eq)]
 #[derive(PartialEq)]
@@ -68,7 +68,7 @@ pub enum Comparator {
 
 
 
-#[derive(Show)]
+#[derive(Debug)]
 #[derive(Eq)]
 #[derive(PartialEq)]
 #[derive(Clone)]
